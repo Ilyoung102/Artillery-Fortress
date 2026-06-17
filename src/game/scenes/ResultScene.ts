@@ -28,6 +28,8 @@ export class ResultScene extends Scene {
   }
 
   create() {
+    this.game.events.emit("scene_change", "ResultScene");
+
     const width = this.cameras.main.width;
     const height = this.cameras.main.height;
 

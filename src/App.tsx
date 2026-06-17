@@ -99,7 +99,7 @@ export default function App() {
       gameInstance.events.on('scene_change', (sceneKey: string) => {
         setIsSettingsOpen(false);
         setActiveSceneKey(sceneKey);
-        if (sceneKey === 'MenuScene' || sceneKey === 'LevelSelectScene') {
+        if (sceneKey !== 'GameScene') {
           setHudState(null);
         }
       });
@@ -540,7 +540,7 @@ export default function App() {
                     ⚔️ 도전할 스테이지 레벨을 터치하여 요새 수호 전쟁을 시작하세요! (가로모드로 스마트폰을 회전하고 터치하시면 주소창이 가려집니다)
                   </p>
                   
-                  <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 w-full max-w-[880px] justify-center">
+                  <div className="grid grid-cols-6 sm:grid-cols-6 md:grid-cols-8 gap-1.5 w-full max-w-[620px] justify-center">
                     {LEVELS.map((level) => {
                       const record = currentSave.progress[level.id] || { levelId: level.id, unlocked: level.id === 1, highScore: 0, stars: 0 };
                       const isUnlocked = level.id === 1 || record.unlocked;
@@ -556,39 +556,39 @@ export default function App() {
                               playBeep(220, 0.12); // Locked feedback sound
                             }
                           }}
-                          className={`group relative aspect-[4/3] rounded-2xl border flex flex-col items-center justify-between p-2 cursor-pointer transition-all duration-300 transform active:scale-95 select-none ${
+                          className={`group relative aspect-[1.3/1] rounded-xl border flex flex-col items-center justify-between p-1 cursor-pointer transition-all duration-150 transform active:scale-95 select-none ${
                             isUnlocked 
-                              ? "bg-slate-900/95 border-sky-500/40 hover:border-sky-400 hover:bg-slate-800/95 hover:shadow-[0_4px_16px_rgba(14,165,233,0.2)]" 
-                              : "bg-slate-950/80 border-slate-900 filter grayscale opacity-40 cursor-not-allowed"
+                              ? "bg-slate-900/95 border-sky-500/30 hover:border-sky-400 hover:bg-slate-800/95 hover:shadow-[0_2px_8px_rgba(14,165,233,0.15)]" 
+                              : "bg-slate-950/70 border-slate-900 filter grayscale opacity-35 cursor-not-allowed"
                           }`}
                         >
                           {/* Locked Badge */}
                           {!isUnlocked && (
-                            <div className="absolute inset-0 flex items-center justify-center bg-slate-950/30 backdrop-blur-[0.5px] rounded-2xl z-10">
-                              <span className="text-xs bg-slate-900 border border-slate-800 p-1 rounded-full shadow-lg">🔒</span>
+                            <div className="absolute inset-0 flex items-center justify-center bg-slate-950/20 backdrop-blur-[0.5px] rounded-xl z-10">
+                              <span className="text-[10px] bg-slate-900 border border-slate-800 p-0.5 rounded-full shadow-md">🔒</span>
                             </div>
                           )}
 
                           {/* Level ID number badge */}
-                          <div className={`text-[9px] font-black font-mono self-start rounded-md px-1 py-0.5 ${
+                          <div className={`text-[7px] font-bold font-mono self-start rounded px-1 py-0.2 ${
                             isUnlocked ? "bg-sky-500/10 text-sky-400 border border-sky-500/10" : "bg-zinc-800 text-zinc-500"
                           }`}>
-                            STAGE {level.id < 10 ? `0${level.id}` : level.id}
+                            STG {level.id}
                           </div>
 
                           {/* Theme visual helper title / nickname */}
-                          <div className="text-[10px] font-extrabold text-slate-100 group-hover:text-yellow-300 transition-colors leading-[1.1] text-center my-0.5 break-keep px-0.5">
+                          <div className="text-[8px] font-black text-slate-100 group-hover:text-yellow-300 transition-colors leading-[1.0] text-center my-0.5 max-w-full truncate px-0.5">
                             {level.name.split(':')[0] || "전투 훈련"}
                           </div>
 
                           {/* Stars Row representation */}
                           {isUnlocked ? (
-                            <div className="flex gap-0.5 items-center justify-center self-stretch h-3">
+                            <div className="flex gap-0.5 items-center justify-center self-stretch h-2.5">
                               {[0, 1, 2].map((starIdx) => (
                                 <span 
                                   key={starIdx} 
-                                  className={`text-[8px] filter drop-shadow-[0_1px_1px_rgba(0,0,0,0.5)] ${
-                                    starIdx < starsAcquired ? "text-yellow-400 animate-pulse font-bold" : "text-zinc-600"
+                                  className={`text-[6.5px] filter drop-shadow-[0_1px_1px_rgba(0,0,0,0.5)] ${
+                                    starIdx < starsAcquired ? "text-yellow-400 font-bold" : "text-zinc-650"
                                   }`}
                                 >
                                   ★
@@ -596,7 +596,7 @@ export default function App() {
                               ))}
                             </div>
                           ) : (
-                            <div className="text-[7.5px] text-zinc-600 font-bold">LOCKED</div>
+                            <div className="text-[6.5px] text-zinc-650 font-bold">LOCKED</div>
                           )}
                         </div>
                       );
@@ -721,7 +721,7 @@ export default function App() {
                 </button>
               </div>
 
-              {/* 3. TOP LEFT STACKED: SQUAD QUICK SELECTOR & TACTICAL MOVE KEYS (Planted Floating) */}
+              {/* 3. TOP LEFT STACKED: SQUAD QUICK SELECTOR (Planted Floating) */}
               <div className="absolute left-2.5 top-[42px] flex flex-col gap-1 pointer-events-auto z-20 select-none">
                 {/* Character Choose Tiny Buttons */}
                 <div className="flex gap-1 bg-black/35 border border-white/10 p-0.5 rounded-lg shadow-lg">
@@ -750,26 +750,26 @@ export default function App() {
                     );
                   })}
                 </div>
+              </div>
 
-                {/* Move Left / Right keys - Always enabled so player can dodge! */}
-                <div className="bg-black/35 border border-white/10 rounded-lg p-0.5 flex gap-1 shadow-lg w-[140px]">
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); handleMovePlayer('left'); }}
-                    className="flex-1 py-0.5 px-1.5 bg-black/45 hover:bg-amber-400 hover:text-black text-white rounded border border-white/5 active:scale-95 transition-all text-center cursor-pointer flex items-center justify-center"
-                    title="Move Left [A]"
-                  >
-                    <ChevronLeft className="w-2.5 h-2.5" />
-                    <span className="text-[6.5px] font-bold ml-0.5">LEFT</span>
-                  </button>
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); handleMovePlayer('right'); }}
-                    className="flex-1 py-0.5 px-1.5 bg-black/45 hover:bg-amber-400 hover:text-black text-white rounded border border-white/5 active:scale-95 transition-all text-center cursor-pointer flex items-center justify-center"
-                    title="Move Right [D]"
-                  >
-                    <span className="text-[6.5px] font-bold mr-0.5">RIGHT</span>
-                    <ChevronRight className="w-2.5 h-2.5" />
-                  </button>
-                </div>
+              {/* 🎮 Tactile Gamepad Left/Right keys - Placed at the LEFT CENTER of screen with 50% larger height for outstanding mobile ergonomics! */}
+              <div className="absolute left-3.5 top-[50%] -translate-y-1/2 bg-slate-900/90 border border-white/15 rounded-2xl p-1.5 flex gap-2 shadow-2xl w-[138px] pointer-events-auto z-20 select-none">
+                <button 
+                  onClick={(e) => { e.stopPropagation(); handleMovePlayer('left'); }}
+                  className="flex-1 h-14 bg-black/55 hover:bg-amber-450 hover:text-slate-950 text-white rounded-xl border border-white/10 active:scale-90 transition-all text-center cursor-pointer flex flex-col items-center justify-center gap-1"
+                  title="Move Left [A]"
+                >
+                  <ChevronLeft className="w-5 h-5 text-amber-400" />
+                  <span className="text-[7.5px] font-black tracking-tight leading-none font-sans">LEFT</span>
+                </button>
+                <button 
+                  onClick={(e) => { e.stopPropagation(); handleMovePlayer('right'); }}
+                  className="flex-1 h-14 bg-black/55 hover:bg-amber-450 hover:text-slate-950 text-white rounded-xl border border-white/10 active:scale-90 transition-all text-center cursor-pointer flex flex-col items-center justify-center gap-1"
+                  title="Move Right [D]"
+                >
+                  <ChevronRight className="w-5 h-5 text-amber-400" />
+                  <span className="text-[7.5px] font-black tracking-tight leading-none font-sans">RIGHT</span>
+                </button>
               </div>
 
               {/* 4. BOTTOM RIGHT: SCI-FI WEAPONS ROW & CASSINI PRECISION INPUTS */}
