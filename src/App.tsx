@@ -475,10 +475,10 @@ export default function App() {
                 </button>
               </div>
 
-              {/* 3. BOTTOM LEFT: SQUAD QUICK SELECTOR & TACTICAL MOVE KEYS (Planted Floating) */}
-              <div className="absolute left-2.5 bottom-2.5 flex flex-col gap-1.5 pointer-events-auto z-20 select-none">
+              {/* 3. TOP LEFT STACKED: SQUAD QUICK SELECTOR & TACTICAL MOVE KEYS (Planted Floating) */}
+              <div className="absolute left-2.5 top-[42px] flex flex-col gap-1 pointer-events-auto z-20 select-none">
                 {/* Character Choose Tiny Buttons */}
-                <div className="flex flex-col gap-1 bg-black/35 border border-white/10 p-0.5 rounded-lg shadow-lg">
+                <div className="flex gap-1 bg-black/35 border border-white/10 p-0.5 rounded-lg shadow-lg">
                   {hudState.availableChars.map((char) => {
                     const isActive = hudState.selectedCharId === char.id;
                     const charEmoji = char.id === 'lumi' ? '🐱' : char.id === 'torbo' ? '🐗' : char.id === 'pico' ? '🐿️' : char.id === 'bumba' ? '🦎' : '🐈';
@@ -486,7 +486,7 @@ export default function App() {
                       <button
                         key={char.id}
                         onClick={(e) => { e.stopPropagation(); handleSelectCharacter(char.id); }}
-                        className={`px-1 lg:px-1.5 py-0.5 rounded-md flex items-center gap-1 border transition-all text-left cursor-pointer ${
+                        className={`px-1.5 py-0.5 rounded-md flex items-center gap-1 border transition-all text-left cursor-pointer ${
                           isActive
                             ? 'bg-emerald-500/80 border-emerald-400 text-white shadow-md scale-102 font-black'
                             : 'bg-black/50 border-white/5 hover:bg-black/70 text-zinc-300'
@@ -505,23 +505,23 @@ export default function App() {
                   })}
                 </div>
 
-                {/* Move Left / Right keys */}
-                <div className="bg-black/40 border border-white/10 rounded-lg p-0.5 flex gap-1 shadow-lg">
+                {/* Move Left / Right keys - Always enabled so player can dodge! */}
+                <div className="bg-black/35 border border-white/10 rounded-lg p-0.5 flex gap-1 shadow-lg w-[140px]">
                   <button 
-                    disabled={!hudState.isPlayerTurn || hudState.activeProjectileActive}
                     onClick={(e) => { e.stopPropagation(); handleMovePlayer('left'); }}
-                    className="flex-1 py-1 px-1.5 bg-black/45 hover:bg-amber-400 hover:text-black text-white rounded border border-white/5 active:scale-95 transition-all text-center cursor-pointer flex items-center justify-center disabled:opacity-20 disabled:pointer-events-none"
+                    className="flex-1 py-0.5 px-1.5 bg-black/45 hover:bg-amber-400 hover:text-black text-white rounded border border-white/5 active:scale-95 transition-all text-center cursor-pointer flex items-center justify-center"
                     title="Move Left [A]"
                   >
-                    <ChevronLeft className="w-3 h-3" />
+                    <ChevronLeft className="w-2.5 h-2.5" />
+                    <span className="text-[6.5px] font-bold ml-0.5">LEFT</span>
                   </button>
                   <button 
-                    disabled={!hudState.isPlayerTurn || hudState.activeProjectileActive}
                     onClick={(e) => { e.stopPropagation(); handleMovePlayer('right'); }}
-                    className="flex-1 py-1 px-1.5 bg-black/45 hover:bg-amber-400 hover:text-black text-white rounded border border-white/5 active:scale-95 transition-all text-center cursor-pointer flex items-center justify-center disabled:opacity-20 disabled:pointer-events-none"
+                    className="flex-1 py-0.5 px-1.5 bg-black/45 hover:bg-amber-400 hover:text-black text-white rounded border border-white/5 active:scale-95 transition-all text-center cursor-pointer flex items-center justify-center"
                     title="Move Right [D]"
                   >
-                    <ChevronRight className="w-3 h-3" />
+                    <span className="text-[6.5px] font-bold mr-0.5">RIGHT</span>
+                    <ChevronRight className="w-2.5 h-2.5" />
                   </button>
                 </div>
               </div>
@@ -785,15 +785,7 @@ export default function App() {
         </div>
       )}
 
-      {/* 랜드스케이프 전용 모드 전환 가이드 */}
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-950 p-6 text-center select-none portrait:flex landscape:hidden">
-        <div className="text-4xl mb-3 animate-bounce">🔄</div>
-        <h2 className="text-base font-black text-white mb-1">가로모드로 전환해 주세요</h2>
-        <p className="text-[10px] text-zinc-400 max-w-xs leading-relaxed">
-          이 게임은 가로모드(Landscape) 전용으로 설계되었습니다. 더욱 광활하고 균형 잡힌 전술 포격을 위해 기기를 가로로 돌려주세요!
-        </p>
-      </div>
-
+      {/* Landscape orientation forced; blocker removed to run unconditionally */}
     </div>
   );
 }

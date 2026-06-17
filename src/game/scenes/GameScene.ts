@@ -588,6 +588,35 @@ export class GameScene extends Scene {
       this.spawnBlock(block);
     });
 
+    // 3.5. Spawn small random walls (could be floating or standing in the air/middle ground)
+    const numRandomWalls = Phaser.Math.Between(4, 7);
+    const materials: Array<'wood' | 'stone' | 'metal' | 'glass'> = ['wood', 'stone', 'metal', 'glass'];
+    for (let i = 0; i < numRandomWalls; i++) {
+      const rx = Phaser.Math.Between(440, 630);
+      const ry = Phaser.Math.Between(150, 420);
+      const rw = Phaser.Math.Between(24, 48);
+      const rh = Phaser.Math.Between(24, 48);
+      const rmat = materials[Phaser.Math.Between(0, materials.length - 1)];
+      const isStatic = Math.random() > 0.4; // 60% are static floating block barriers!
+
+      const blockObj = this.matter.add.image(rx, ry, `block_${rmat}`, undefined, {
+        isStatic: isStatic,
+        friction: 0.3,
+        restitution: 0.1,
+        density: 0.02,
+        label: `block_${rmat}`
+      });
+      blockObj.setDisplaySize(rw, rh);
+
+      this.blockBodies.push(blockObj);
+      const maxHp = DamageSystem.getMaterialMaxHp(rmat);
+      this.blockHealthMap.set(blockObj.body, {
+        hp: maxHp,
+        maxHp,
+        material: rmat
+      });
+    }
+
     // 4. Populate Enemy Units
     this.levelData.enemies.forEach(enemy => {
       this.spawnEnemy(enemy);
@@ -641,8 +670,8 @@ export class GameScene extends Scene {
       });
     }
 
-    // Active Keyboard Walking / Movement Adjustments
-    if (this.isPlayerTurn && !this.activeProjectile && this.activePlayerUnit) {
+    // Active Keyboard Walking / Movement Adjustments - Allow moving even during enemy turns to dodge shots!
+    if (this.activePlayerUnit && !this.isAiming) {
       let moveX = 0;
       if (this.cursors && (this.cursors.left.isDown || (this.wasd.left && this.wasd.left.isDown))) {
         moveX = -2;
@@ -1255,9 +1284,11 @@ export class GameScene extends Scene {
     // Trigger whistling whoosh flight sound
     this.startFlySound();
 
-    // Lock player selection or reset visual stretch state
-    this.activePlayerUnit.setStatic(true);
-    this.activePlayerUnit.setPosition(sPos.x, sPos.y);
+    // Lock player selection or reset visual stretch state if player is shooting
+    if (!isEnemyWeapon && this.activePlayerUnit) {
+      this.activePlayerUnit.setStatic(true);
+      this.activePlayerUnit.setPosition(sPos.x, sPos.y);
+    }
     this.isAiming = false;
     this.trajectoryGraphics.clear();
 
@@ -1849,9 +1880,9 @@ export class GameScene extends Scene {
     return false;
   }
 
-  // Allow manual horizontal move from React HUD touch buttons or cursors
+  // Allow manual horizontal move from React HUD touch buttons or cursors - Allow moving always to dodge!
   public triggerManualMove(dx: number) {
-    if (!this.isPlayerTurn || this.activeProjectile || !this.activePlayerUnit) return;
+    if (!this.activePlayerUnit) return;
     const nextX = Phaser.Math.Clamp(this.activePlayerUnit.x + dx, 50, 420);
     this.activePlayerUnit.setPosition(nextX, this.activePlayerUnit.y);
     

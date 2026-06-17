@@ -26,8 +26,8 @@ export function createGame(parentID: string): Game {
         gravity: { x: 0, y: 0.95 },
         debug: false, // Set to true to view wireframe meshes on debugging
         setBounds: {
-          left: true,
-          right: true,
+          left: false,
+          right: false,
           top: false, // Let projectiles fly high dynamically!
           bottom: true
         }
