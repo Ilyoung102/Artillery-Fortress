@@ -68,6 +68,13 @@ export class GameScene extends Scene {
   private physicalDebrisList: any[] = [];
   private healthBarGraphics!: Phaser.GameObjects.Graphics;
 
+  // Sound Engine tracking states
+  private audioCtx: AudioContext | null = null;
+  private activeFlyOscillator: OscillatorNode | null = null;
+  private activeFlyGain: GainNode | null = null;
+  private aimOscillator: OscillatorNode | null = null;
+  private aimGain: GainNode | null = null;
+
   constructor() {
     super({ key: "GameScene" });
   }
@@ -96,6 +103,10 @@ export class GameScene extends Scene {
     this.playerMaxHp = 600;
     this.playerHp = 600;
     this.physicalDebrisList = [];
+
+    // Make sure we stop leftover audio loops
+    this.stopFlySound();
+    this.stopAimCharge();
 
     const levelId = this.levelData.id;
     // Determine middle hill presence based on level config
@@ -669,6 +680,9 @@ export class GameScene extends Scene {
         // Auto follow weapon body
         this.cameras.main.scrollX = Phaser.Math.Clamp(body.position.x - 400, 0, 150);
 
+        // Dynamically update whistling flight sound pitch based on projectile velocity and height
+        this.updateFlySound(body.speed, body.position.y);
+
         // Check if stopped moving, fell off boundaries, or took too long
         const speed = body.speed;
         const outOfBounds = (body.position.x > 1100 || body.position.x < -100 || body.position.y > 620);
@@ -1018,6 +1032,9 @@ export class GameScene extends Scene {
     const startY = this.levelData.playerStart.y;
 
     if (isDragging) {
+      if (!this.isAiming) {
+        this.startAimCharge();
+      }
       this.isAiming = true;
       // Calculate drag distance
       let dx = startX - screenX;
@@ -1032,18 +1049,25 @@ export class GameScene extends Scene {
         dy = Math.sin(angle) * 120;
       }
 
+      // Update progressive tension charging sound pitch and volume
+      this.updateAimCharge(dist);
+
       // Compute initial velocities
       const dragMultiplier = 0.16; // Balance force scale
       const vx = dx * dragMultiplier;
-      const vy = dy * dragMultiplier;
+      const vy = dy * dx * 0; // standard Y is resolved correctly next line
+      const vyCorrect = dy * dragMultiplier;
 
       // Physically shift character visual slightly to mimic slingshot rubber stretching!
       this.activePlayerUnit.setPosition(startX - dx, startY - dy);
 
       // Redraw dots
-      this.drawTrajectory(startX, startY, vx, vy);
+      this.drawTrajectory(startX, startY, vx, vyCorrect);
     } else {
       // Released aim or cancelled
+      if (this.isAiming) {
+        this.stopAimCharge();
+      }
       this.isAiming = false;
       this.activePlayerUnit.setPosition(startX, startY);
       this.trajectoryGraphics.clear();
@@ -1147,6 +1171,7 @@ export class GameScene extends Scene {
     }
 
     this.playBeep(260, 0.12);
+    this.stopAimCharge();
 
     // Calculate launching velocity
     const dragMultiplier = 0.16;
@@ -1226,6 +1251,9 @@ export class GameScene extends Scene {
     (proj as any).isEnemy = isEnemyWeapon;
 
     this.activeProjectile = proj;
+
+    // Trigger whistling whoosh flight sound
+    this.startFlySound();
 
     // Lock player selection or reset visual stretch state
     this.activePlayerUnit.setStatic(true);
@@ -1409,6 +1437,9 @@ export class GameScene extends Scene {
          damage: 150,
          specialEffect: 'explode'
       } as any);
+    } else {
+      // Play material-specific physical break sound
+      this.playBreakSound(record.material);
     }
 
     // Clear and remove physical body
@@ -1441,7 +1472,8 @@ export class GameScene extends Scene {
     this.matter.world.remove(b);
 
     this.cameras.main.shake(150, 0.012);
-    this.playBeep(120, 0.4);
+    // Play wet squishy slime pop breaking sound
+    this.playBreakSound('enemy');
 
     this.notifyHUD();
     this.checkGameEndStatus();
@@ -1466,7 +1498,9 @@ export class GameScene extends Scene {
     });
 
     this.cameras.main.shake(180, 0.018);
-    this.playBeep(90, 0.35);
+    
+    // Play massive deep explosive synthesize rumble sound
+    this.playBreakSound('tnt');
 
     // Calculate crater radius first to perform precise overlapping check
     let craterRadius = 24 + Math.random() * 8;
@@ -1688,6 +1722,9 @@ export class GameScene extends Scene {
 
   private terminateProjectileTurn() {
     if (!this.activeProjectile) return;
+
+    // Stop flight whistling sounds cleanly
+    this.stopFlySound();
 
     // Purge particles and destroy body
     if ((this.activeProjectile as any).trailParticles) {
@@ -1943,6 +1980,296 @@ export class GameScene extends Scene {
       };
     } catch (e) {
       // Audio context might be blocked
+    }
+  }
+
+  private getAudioContext(): AudioContext | null {
+    const state = SaveSystem.load();
+    if (!state.settings.soundOn) return null;
+
+    if (!this.audioCtx) {
+      try {
+        this.audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      } catch (e) {
+        return null;
+      }
+    }
+    if (this.audioCtx && this.audioCtx.state === 'suspended') {
+      this.audioCtx.resume().catch(() => {});
+    }
+    return this.audioCtx;
+  }
+
+  private startFlySound() {
+    const ctx = this.getAudioContext();
+    if (!ctx) return;
+
+    this.stopFlySound();
+
+    try {
+      const osc = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+
+      // Sine wave works best for dynamic whistle/whoosh
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(320, ctx.currentTime);
+
+      gainNode.gain.setValueAtTime(0.0, ctx.currentTime);
+      gainNode.gain.linearRampToValueAtTime(0.12, ctx.currentTime + 0.15); // Fade in whoosh
+
+      osc.connect(gainNode);
+      gainNode.connect(ctx.destination);
+
+      osc.start();
+
+      this.activeFlyOscillator = osc;
+      this.activeFlyGain = gainNode;
+    } catch (e) {
+      // Audio issue
+    }
+  }
+
+  private updateFlySound(speed: number, y: number) {
+    const ctx = this.getAudioContext();
+    if (!ctx || !this.activeFlyOscillator) return;
+
+    try {
+      // Whistle frequency changes as height/velocity changes
+      const targetFreq = Phaser.Math.Clamp(280 + (speed * 16) + (600 - y) * 0.45, 180, 950);
+      this.activeFlyOscillator.frequency.setTargetAtTime(targetFreq, ctx.currentTime, 0.04);
+    } catch (e) {
+      // Audio issue
+    }
+  }
+
+  private stopFlySound() {
+    if (this.activeFlyOscillator) {
+      const osc = this.activeFlyOscillator;
+      const gainNode = this.activeFlyGain;
+      this.activeFlyOscillator = null;
+      this.activeFlyGain = null;
+
+      try {
+        const ctx = this.getAudioContext();
+        if (ctx && gainNode) {
+          gainNode.gain.cancelScheduledValues(ctx.currentTime);
+          gainNode.gain.setValueAtTime(gainNode.gain.value, ctx.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+          setTimeout(() => {
+            try {
+              osc.stop();
+              osc.disconnect();
+              gainNode.disconnect();
+            } catch (err) {}
+          }, 100);
+        } else {
+          osc.stop();
+        }
+      } catch (e) {
+        // Fallback
+      }
+    }
+  }
+
+  private startAimCharge() {
+    const ctx = this.getAudioContext();
+    if (!ctx) return;
+
+    this.stopAimCharge();
+
+    try {
+      const osc = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+
+      // Triangle/sawtooth wave hybrid gives a nice tension energy hum
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(120, ctx.currentTime);
+
+      gainNode.gain.setValueAtTime(0.01, ctx.currentTime);
+
+      osc.connect(gainNode);
+      gainNode.connect(ctx.destination);
+
+      osc.start();
+
+      this.aimOscillator = osc;
+      this.aimGain = gainNode;
+    } catch (e) {
+      // Audio issue
+    }
+  }
+
+  private updateAimCharge(dist: number) {
+    const ctx = this.getAudioContext();
+    if (!ctx || !this.aimOscillator || !this.aimGain) return;
+
+    try {
+      // Frequency rises from 120Hz to 480Hz as slingshot is stretched
+      const targetFreq = 120 + (dist / 120) * 360;
+      this.aimOscillator.frequency.setTargetAtTime(targetFreq, ctx.currentTime, 0.03);
+
+      // Volume increases slightly for physical tension representation
+      const targetVol = Phaser.Math.Clamp(0.015 + (dist / 120) * 0.065, 0.015, 0.08);
+      this.aimGain.gain.setValueAtTime(targetVol, ctx.currentTime);
+    } catch (e) {
+      // Audio issue
+    }
+  }
+
+  private stopAimCharge() {
+    if (this.aimOscillator) {
+      const osc = this.aimOscillator;
+      const gainNode = this.aimGain;
+      this.aimOscillator = null;
+      this.aimGain = null;
+
+      try {
+        const ctx = this.getAudioContext();
+        if (ctx && gainNode) {
+          gainNode.gain.cancelScheduledValues(ctx.currentTime);
+          gainNode.gain.setValueAtTime(gainNode.gain.value, ctx.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+          setTimeout(() => {
+            try {
+              osc.stop();
+              osc.disconnect();
+              gainNode.disconnect();
+            } catch (err) {}
+          }, 100);
+        } else {
+          osc.stop();
+        }
+      } catch (e) {
+        // Fallback
+      }
+    }
+  }
+
+  private playBreakSound(material: string) {
+    const ctx = this.getAudioContext();
+    if (!ctx) return;
+
+    try {
+      const now = ctx.currentTime;
+
+      if (material === 'glass') {
+        // High-pitched crystalline clinking & shattering
+        const freqs = [1900, 2600, 3700, 4400];
+        freqs.forEach((freq, idx) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, now);
+          osc.frequency.exponentialRampToValueAtTime(freq * 0.85, now + 0.12);
+
+          gain.gain.setValueAtTime(0.05 - (idx * 0.008), now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1 + (idx * 0.04));
+
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.3);
+        });
+      } else if (material === 'wood') {
+        // Snapping wooden plank sound
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(300, now);
+        osc.frequency.exponentialRampToValueAtTime(80, now + 0.1);
+
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.12);
+
+        // Sharp dry crack transient
+        const click = ctx.createOscillator();
+        const clickG = ctx.createGain();
+        click.type = 'sawtooth';
+        click.frequency.setValueAtTime(140, now);
+        clickG.gain.setValueAtTime(0.04, now);
+        clickG.gain.exponentialRampToValueAtTime(0.001, now + 0.035);
+        click.connect(clickG);
+        clickG.connect(ctx.destination);
+        click.start(now);
+        click.stop(now + 0.04);
+      } else if (material === 'stone') {
+        // Rigid rocky/stone crash
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(160, now);
+        osc.frequency.exponentialRampToValueAtTime(50, now + 0.2);
+
+        gain.gain.setValueAtTime(0.16, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.22);
+
+        // Low secondary rumble knock
+        const low = ctx.createOscillator();
+        const lowG = ctx.createGain();
+        low.type = 'sine';
+        low.frequency.setValueAtTime(85, now);
+        lowG.gain.setValueAtTime(0.1, now);
+        lowG.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+        low.connect(lowG);
+        lowG.connect(ctx.destination);
+        low.start(now);
+        low.stop(now + 0.18);
+      } else if (material === 'tnt') {
+        // Deep powerful explosion rumble
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(140, now);
+        osc.frequency.linearRampToValueAtTime(15, now + 0.35);
+
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+
+        const sub = ctx.createOscillator();
+        const subG = ctx.createGain();
+        sub.type = 'sine';
+        sub.frequency.setValueAtTime(70, now);
+        sub.frequency.linearRampToValueAtTime(20, now + 0.4);
+        subG.gain.setValueAtTime(0.35, now);
+        subG.gain.exponentialRampToValueAtTime(0.001, now + 0.42);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        sub.connect(subG);
+        subG.connect(ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.45);
+        sub.start(now);
+        sub.stop(now + 0.45);
+      } else {
+        // Wet gelatinous pop/slime squeak for enemies
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(240, now);
+        osc.frequency.exponentialRampToValueAtTime(700, now + 0.08);
+
+        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.12);
+      }
+    } catch (e) {
+      // Audio issue
     }
   }
 
