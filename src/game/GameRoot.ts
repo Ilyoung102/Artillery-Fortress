@@ -13,6 +13,9 @@ export function createGame(parentID: string): Game {
     height: 600,
     parent: parentID,
     backgroundColor: '#e8f4fd',
+    audio: {
+      noAudio: true
+    },
     physics: {
       default: 'matter',
       matter: {

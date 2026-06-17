@@ -33,6 +33,11 @@ export class GameScene extends Scene {
   private waveOffset: number = 0;
   private hazardGraphics!: Phaser.GameObjects.Graphics;
   private terrainGraphics!: Phaser.GameObjects.Graphics;
+  
+  // Custom stage geometries and craters
+  private craters: { x: number; y: number; radius: number }[] = [];
+  private hasMiddleHill1: boolean = false;
+  private hasMiddleHill2: boolean = false;
 
   // Slingshot drag tracking
   private dragStartPos = { x: 0, y: 0 };
@@ -53,6 +58,15 @@ export class GameScene extends Scene {
   private bgClouds: { graphics: Phaser.GameObjects.Graphics; speed: number }[] = [];
   private cursors: any;
   private wasd: any;
+
+  // Real Player Health tracker
+  private playerMaxHp: number = 600;
+  private playerHp: number = 600;
+  private sceneStartTime: number = 0;
+
+  // Physical Debris list
+  private physicalDebrisList: any[] = [];
+  private healthBarGraphics!: Phaser.GameObjects.Graphics;
 
   constructor() {
     super({ key: "GameScene" });
@@ -76,6 +90,116 @@ export class GameScene extends Scene {
     this.blockBodies = [];
     this.enemyBodies = [];
     this.activeProjectile = null;
+    this.craters = [];
+
+    // Real Player HP Reset
+    this.playerMaxHp = 600;
+    this.playerHp = 600;
+    this.physicalDebrisList = [];
+
+    const levelId = this.levelData.id;
+    // Determine middle hill presence based on level config
+    this.hasMiddleHill1 = (levelId % 2 === 1 && levelId >= 3);
+    this.hasMiddleHill2 = (levelId % 3 === 0);
+
+    // Reinforce level variety with cool extra defensive shields & tactical barriers dynamically!
+    if (levelId === 2) {
+      if (!this.levelData.blocks.some(b => b.id.startsWith("shield_"))) {
+        this.levelData.blocks.push(
+          { id: "shield_g1", x: 740, y: 460, width: 15, height: 110, material: "glass", shape: "box" }
+        );
+      }
+    } else if (levelId === 4) {
+      if (!this.levelData.blocks.some(b => b.id.startsWith("shield_"))) {
+        this.levelData.blocks.push(
+          { id: "shield_s1", x: 670, y: 460, width: 24, height: 100, material: "stone", shape: "box" }
+        );
+      }
+    } else if (levelId === 5) {
+      if (!this.levelData.blocks.some(b => b.id.startsWith("shield_"))) {
+        this.levelData.blocks.push(
+          { id: "shield_s1", x: 470, y: 420, width: 25, height: 160, material: "stone", shape: "box" },
+          { id: "shield_s2", x: 590, y: 440, width: 25, height: 120, material: "stone", shape: "box" }
+        );
+      }
+    } else if (levelId === 8) {
+      if (!this.levelData.blocks.some(b => b.id.startsWith("shield_"))) {
+        this.levelData.blocks.push(
+          { id: "shield_m1", x: 490, y: 220, width: 60, height: 15, material: "metal", shape: "box" },
+          { id: "shield_m2", x: 580, y: 150, width: 60, height: 15, material: "metal", shape: "box" }
+        );
+      }
+    } else if (levelId === 10) {
+      if (!this.levelData.blocks.some(b => b.id.startsWith("shield_"))) {
+        this.levelData.blocks.push(
+          { id: "shield_v1", x: 530, y: 445, width: 25, height: 100, material: "stone", shape: "box" },
+          { id: "shield_v2", x: 530, y: 385, width: 45, height: 45, material: "tnt", shape: "box" }
+        );
+      }
+    } else if (levelId === 12) {
+      if (!this.levelData.blocks.some(b => b.id.startsWith("shield_"))) {
+        this.levelData.blocks.push(
+          { id: "shield_f1", x: 615, y: 290, width: 15, height: 180, material: "metal", shape: "box" },
+          { id: "shield_f2", x: 670, y: 240, width: 80, height: 15, material: "glass", shape: "box" }
+        );
+      }
+    }
+
+    // Dynamic generation of cool, distinctive defensive shields for both allies (player) and enemies (slime) across ALL levels!
+    if (!this.levelData.blocks.some(b => b.id.startsWith("allyshield_"))) {
+      // Choose materials based on the level theme / difficulty
+      const allyMaterial = levelId <= 3 ? "wood" : (levelId <= 7 ? "stone" : "metal");
+      const enemyMaterial = levelId <= 2 ? "wood" : (levelId <= 6 ? "stone" : "metal");
+
+      const tempPlayerBaseY = this.levelData.playerStart.y + 20; // estimate player base
+      const tempEnemyBaseY = 510;
+
+      // Ally defensive wall protecting from direct frontal trajectories
+      this.levelData.blocks.push({
+        id: "allyshield_wall",
+        x: 290, // Positioned on the player's side platform edge
+        y: tempPlayerBaseY - 45, 
+        width: 20,
+        height: 90,
+        material: allyMaterial as 'wood' | 'stone' | 'metal',
+        shape: "box"
+      });
+
+      // Ally glass dome canopy or shelter ceiling to shield from steep mortars
+      this.levelData.blocks.push({
+        id: "allyshield_ceiling",
+        x: 180, // Hangs right above the player start zone
+        y: tempPlayerBaseY - 100,
+        width: 100,
+        height: 15,
+        material: "glass", // Clear protective canopy!
+        shape: "box"
+      });
+
+      // Enemy defensive shield protecting the right slimes
+      this.levelData.blocks.push({
+        id: "enemyshield_wall",
+        x: 690, // Positioned at the edge of the right enemy platform
+        y: tempEnemyBaseY - 50,
+        width: 22,
+        height: 100,
+        material: enemyMaterial as 'wood' | 'stone' | 'metal',
+        shape: "box"
+      });
+      
+      // Extra defensive overhead shield for enemies at higher levels
+      if (levelId >= 3) {
+        this.levelData.blocks.push({
+          id: "enemyshield_canopy",
+          x: 720,
+          y: tempEnemyBaseY - 110,
+          width: 70,
+          height: 15,
+          material: "wood",
+          shape: "box"
+        });
+      }
+    }
 
     // Load sound configurations and last selections if stored
     const saveData = SaveSystem.load();
@@ -101,6 +225,7 @@ export class GameScene extends Scene {
   }
 
   create() {
+    this.sceneStartTime = this.time.now;
     const width = this.cameras.main.width;
     const height = this.cameras.main.height;
 
@@ -122,6 +247,21 @@ export class GameScene extends Scene {
     } else if (this.levelData.themeColor === "#e5f0f8" || this.levelData.themeColor === "#edf1f2") { // Sky / High grounds
       skyTopColor = 0x4dabf7; // bright blue sky
       skyBotColor = 0xe5f0f8;
+    } else if (this.levelData.themeColor === "#e6f8f5") { // Greenhouse
+      skyTopColor = 0x0c8599; // Emerald cyan
+      skyBotColor = 0xe6f8f5;
+    } else if (this.levelData.themeColor === "#f5f5f7") { // Factory Industrial
+      skyTopColor = 0xb0b5bc; // smoggy gray
+      skyBotColor = 0xf5f5f7;
+    } else if (this.levelData.themeColor === "#fbf3db" || this.levelData.themeColor === "#fdf3e7") { // Desert
+      skyTopColor = 0xfaad14; // deep sand amber
+      skyBotColor = 0xfdf3e7;
+    } else if (this.levelData.themeColor === "#fdf8ef") { // Retreat
+      skyTopColor = 0xd8c29d; // sunset caramel
+      skyBotColor = 0xfdf8ef;
+    } else if (this.levelData.themeColor === "#fdfbff" || this.levelData.themeColor === "#f6f3fc") { // Cyber/Marble
+      skyTopColor = 0x845ef7; // deep nebula violet
+      skyBotColor = 0xf6f3fc;
     }
 
     skyBg.fillGradientStyle(skyTopColor, skyTopColor, skyBotColor, skyBotColor, 1);
@@ -132,84 +272,152 @@ export class GameScene extends Scene {
     sunGraphics.setScrollFactor(0.05); // far parallax
     let sunColor = 0xffe066;
     let rayColor = 0xfffae6;
-    if (this.levelData.themeColor === "#ffede5") { sunColor = 0xff6b6b; rayColor = 0xffc9c9; } // Volcano blood sun
+    let isMoon = false;
+
+    if (this.levelData.themeColor === "#ffd5c6" || this.levelData.themeColor === "#ffede5") { 
+      sunColor = 0xe03131; // Volcano bloody deep red sun
+      rayColor = 0xffc9c9; 
+    } else if (this.levelData.themeColor === "#f6f3fc" || this.levelData.themeColor === "#fdfbff") {
+      sunColor = 0xffd23f; // Cyber crescent moon
+      rayColor = 0xf3d9fa;
+      isMoon = true;
+    } else if (this.levelData.themeColor === "#e5f0f8" || this.levelData.themeColor === "#edf1f2") {
+      sunColor = 0xf8f9fa; // Pearl sky moon
+      rayColor = 0xe9ecef;
+      isMoon = true;
+    }
     
-    // Draw sun core
     sunGraphics.fillStyle(sunColor, 1);
-    sunGraphics.fillCircle(120, 100, 35);
-    // Draw sun glow rings
-    sunGraphics.fillStyle(rayColor, 0.25);
-    sunGraphics.fillCircle(120, 100, 50);
-    sunGraphics.fillStyle(rayColor, 0.1);
-    sunGraphics.fillCircle(120, 100, 70);
+    if (isMoon) {
+      // Draw crescent moon
+      sunGraphics.fillCircle(120, 100, 32);
+      sunGraphics.fillStyle(skyTopColor, 1);
+      sunGraphics.fillCircle(136, 92, 28);
+    } else {
+      sunGraphics.fillCircle(120, 100, 35);
+    }
+    // Draw celestial glow rings
+    sunGraphics.fillStyle(rayColor, 0.22);
+    sunGraphics.fillCircle(120, 100, 48);
+    sunGraphics.fillStyle(rayColor, 0.08);
+    sunGraphics.fillCircle(120, 100, 68);
 
     // 2. Parallax Mountains and Castle Silhouettes
     const bgGraphics = this.add.graphics();
     bgGraphics.setScrollFactor(0.08); // distant mountain parallax
 
-    // Far Mountain Layer (soft silhouetted lavender-blue)
-    bgGraphics.fillStyle(0xd6e4f0, 0.75);
+    // Far Mountain Layer (soft silhouetted lavender-blue/purple depending on level themes)
+    let mountainFarColor = 0xd6e4f0;
+    let mountainMidColor = 0xaabecf;
+    if (this.levelData.themeColor === "#f5f5f7") {
+      mountainFarColor = 0xb2bdc6;
+      mountainMidColor = 0x8a9ba8;
+    } else if (this.levelData.themeColor === "#ffd5c6" || this.levelData.themeColor === "#ffede5") {
+      mountainFarColor = 0x803e3d;
+      mountainMidColor = 0x4f121b;
+    } else if (this.levelData.themeColor === "#f6f3fc" || this.levelData.themeColor === "#fdfbff") {
+      mountainFarColor = 0xb197fc;
+      mountainMidColor = 0x6741d9;
+    } else if (this.levelData.themeColor === "#e6f8f5") {
+      mountainFarColor = 0x99e9f2;
+      mountainMidColor = 0x12b886;
+    } else if (this.levelData.themeColor === "#fbf3db" || this.levelData.themeColor === "#fdf3e7") {
+      mountainFarColor = 0xffe3e3;
+      mountainMidColor = 0xe67e22;
+    }
+
+    const levelId = this.levelData.id || 1;
+
+    // Shift coordinates of distant mountains mathematically depending on stage levels to make them physically separate
+    const farY1 = 300 + Math.sin(levelId * 1.7) * 45;
+    const farY2 = 200 + Math.cos(levelId * 2.3) * 35;
+    const farY3 = 320 + Math.sin(levelId * 0.9) * 50;
+    const farY4 = 180 + Math.cos(levelId * 1.4) * 30;
+    const farY5 = 340 + Math.sin(levelId * 0.6) * 45;
+    const farY6 = 220 + Math.cos(levelId * 1.8) * 35;
+    const farY7 = 320 + Math.sin(levelId * 2.1) * 40;
+
+    bgGraphics.fillStyle(mountainFarColor, 0.75);
     bgGraphics.beginPath();
     bgGraphics.moveTo(0, height);
-    bgGraphics.lineTo(0, 300);
-    bgGraphics.lineTo(180, 200);
-    bgGraphics.lineTo(340, 320);
-    bgGraphics.lineTo(520, 180);
-    bgGraphics.lineTo(680, 340);
-    bgGraphics.lineTo(840, 220);
-    bgGraphics.lineTo(1024, 320);
+    bgGraphics.lineTo(0, farY1);
+    bgGraphics.lineTo(180, farY2);
+    bgGraphics.lineTo(340, farY3);
+    bgGraphics.lineTo(520, farY4);
+    bgGraphics.lineTo(680, farY5);
+    bgGraphics.lineTo(840, farY6);
+    bgGraphics.lineTo(1024, farY7);
     bgGraphics.lineTo(1024, height);
     bgGraphics.closePath();
     bgGraphics.fillPath();
 
-    // Middle Mountain Layer with Castle Fortress Architecture Silhouettes
-    bgGraphics.fillStyle(0xaabecf, 0.9);
+    // Middle background silhouettes: shift heights & castle tower placements based on levelId
+    const midY1 = 360 + Math.cos(levelId * 1.5) * 30;
+    const midY2 = 280 + Math.sin(levelId * 1.9) * 25;
+    const castleLeftTowerTop = 180 + Math.abs(Math.sin(levelId * 1.2)) * 60 - 30;
+    const castleLeftTowerX = 220 + (levelId * 17) % 60 - 30;
+    const castleRightTowerTop = 220 + Math.abs(Math.cos(levelId * 1.5)) * 80 - 40;
+    const castleRightTowerX = 760 + (levelId * 29) % 120 - 60;
+
+    bgGraphics.fillStyle(mountainMidColor, 0.9);
     bgGraphics.beginPath();
     bgGraphics.moveTo(0, height);
-    bgGraphics.lineTo(0, 360);
-    bgGraphics.lineTo(220, 280);
-    // Left Castle Fortress watchtower silhouette:
-    bgGraphics.lineTo(220, 210);
-    bgGraphics.lineTo(210, 210);
-    bgGraphics.lineTo(210, 180);
-    bgGraphics.lineTo(225, 180);
-    bgGraphics.lineTo(225, 190);
-    bgGraphics.lineTo(235, 190);
-    bgGraphics.lineTo(235, 180);
-    bgGraphics.lineTo(250, 180);
-    bgGraphics.lineTo(250, 210);
-    bgGraphics.lineTo(240, 210);
-    bgGraphics.lineTo(240, 290);
-    // Fortress battlements walls trailing:
+    bgGraphics.lineTo(0, midY1);
+    bgGraphics.lineTo(220, midY2);
+
+    // Left watchtower silhouette
+    bgGraphics.lineTo(castleLeftTowerX, castleLeftTowerTop + 30);
+    bgGraphics.lineTo(castleLeftTowerX - 10, castleLeftTowerTop + 30);
+    bgGraphics.lineTo(castleLeftTowerX - 10, castleLeftTowerTop);
+    bgGraphics.lineTo(castleLeftTowerX + 25, castleLeftTowerTop);
+    bgGraphics.lineTo(castleLeftTowerX + 25, castleLeftTowerTop + 30);
+    bgGraphics.lineTo(castleLeftTowerX + 15, castleLeftTowerTop + 30);
+    bgGraphics.lineTo(castleLeftTowerX + 15, 290);
+
+    // Mid structural silhouettes
     bgGraphics.lineTo(330, 300);
     bgGraphics.lineTo(370, 300);
-    bgGraphics.lineTo(370, 240); // another fort wall
+    bgGraphics.lineTo(370, 240);
     bgGraphics.lineTo(400, 240);
     bgGraphics.lineTo(400, 310);
     bgGraphics.lineTo(600, 340);
-    // Right castle tower:
-    bgGraphics.lineTo(760, 290);
-    bgGraphics.lineTo(760, 220);
-    bgGraphics.lineTo(780, 220);
-    bgGraphics.lineTo(780, 295);
+
+    // Right watchtower silhouette
+    bgGraphics.lineTo(castleRightTowerX, castleRightTowerTop + 70);
+    bgGraphics.lineTo(castleRightTowerX, castleRightTowerTop);
+    bgGraphics.lineTo(castleRightTowerX + 20, castleRightTowerTop);
+    bgGraphics.lineTo(castleRightTowerX + 20, castleRightTowerTop + 75);
+    
     bgGraphics.lineTo(880, 370);
     bgGraphics.lineTo(1024, 340);
     bgGraphics.lineTo(1024, height);
     bgGraphics.closePath();
     bgGraphics.fillPath();
 
-    // Near Hills Layer (adjust color to match level themes perfectly)
+    // Near Hills Layer: Calculate dynamic hills peaks depending on level ID
     let hillColor = 0x82b473; // Grasslands default green
     let treeColor = 0x5e8c50; // default dark green trees
     if (this.levelData.themeColor === "#f5f5f7") {
       hillColor = 0x7a8a99; // Industrial grey-teal
       treeColor = 0x566473;
-    } else if (this.levelData.themeColor === "#fdf3e7" || this.levelData.themeColor === "#ffd5c6") {
+    } else if (this.levelData.themeColor === "#ffd5c6" || this.levelData.themeColor === "#ffede5") {
       hillColor = 0xd9a05b; // Sand/desert
       treeColor = 0xa67438;
     } else if (this.levelData.themeColor === "#fdf8ef") {
       hillColor = 0xa68c6d; // Warm brown/retreat
       treeColor = 0x7a634b;
+    } else if (this.levelData.themeColor === "#fbf3db" || this.levelData.themeColor === "#fdf3e7") {
+      hillColor = 0xd9a05b; // Sand
+      treeColor = 0xa67438;
+    } else if (this.levelData.themeColor === "#f6f3fc" || this.levelData.themeColor === "#fdfbff") {
+      hillColor = 0x6741d9; // purple cyber hills!
+      treeColor = 0x4523a5;
+    } else if (this.levelData.themeColor === "#e6f8f5") {
+      hillColor = 0x12b886; // emerald hills
+      treeColor = 0x087f5b;
+    } else if (this.levelData.themeColor === "#e5f0f8" || this.levelData.themeColor === "#edf1f2") {
+      hillColor = 0x74c0fc; // frost blue hills
+      treeColor = 0x1c7ed6;
     }
     
     const nearHills = this.add.graphics();
@@ -217,28 +425,44 @@ export class GameScene extends Scene {
     nearHills.fillStyle(hillColor, 0.98);
     nearHills.beginPath();
     nearHills.moveTo(0, height);
-    nearHills.lineTo(0, 470);
-    // Scenic geometric multi-segment ridges instead of curves for strong type-safe styling
-    nearHills.lineTo(250, 410);
-    nearHills.lineTo(500, 455);
-    nearHills.lineTo(750, 485);
-    nearHills.lineTo(1024, 430);
+
+    // Compute dynamic, beautiful hills coordinates for each stage level
+    const hillY1 = 470 + Math.sin(levelId * 0.7) * 35;
+    const hillY2 = 410 + Math.cos(levelId * 0.9) * 25;
+    const hillY3 = 455 + Math.sin(levelId * 1.3) * 30;
+    const hillY4 = 485 + Math.cos(levelId * 1.7) * 40;
+    const hillY5 = 430 + Math.sin(levelId * 2.1) * 25;
+
+    nearHills.lineTo(0, hillY1);
+    nearHills.lineTo(250, hillY2);
+    nearHills.lineTo(500, hillY3);
+    nearHills.lineTo(750, hillY4);
+    nearHills.lineTo(1024, hillY5);
     nearHills.lineTo(1024, height);
     nearHills.closePath();
     nearHills.fillPath();
 
-    // Draw little stylized pine trees / bushes silhouettes on the near hills
+    // Draw little stylized pine trees / bushes silhouettes resting perfectly on the near hills heights
     nearHills.fillStyle(treeColor, 1);
     const treePoints = [100, 160, 340, 420, 580, 720, 850, 930];
     treePoints.forEach(tx => {
-      // Calculate height of the hill at x coordinate approx
-      let ty = 470;
-      if (tx < 500) {
-        ty = 450;
+      // Linearly interpolate the exact height of the hills profile on x position:
+      let ty = hillY1;
+      if (tx < 250) {
+        const t = tx / 250;
+        ty = hillY1 + (hillY2 - hillY1) * t;
+      } else if (tx < 500) {
+        const t = (tx - 250) / 250;
+        ty = hillY2 + (hillY3 - hillY2) * t;
+      } else if (tx < 750) {
+        const t = (tx - 500) / 250;
+        ty = hillY3 + (hillY4 - hillY3) * t;
       } else {
-        ty = 460;
+        const t = (tx - 750) / 274;
+        ty = hillY4 + (hillY5 - hillY4) * t;
       }
-      // Stack triangle visual
+
+      // Stack triangle visuals
       nearHills.fillTriangle(tx, ty - 38, tx - 10, ty - 14, tx + 10, ty - 14);
       nearHills.fillTriangle(tx, ty - 49, tx - 8, ty - 25, tx + 8, ty - 25);
       nearHills.fillRect(tx - 3, ty - 14, 6, 14); // Trunk
@@ -289,77 +513,7 @@ export class GameScene extends Scene {
 
     // Graphic terrain drawing
     this.terrainGraphics = this.add.graphics();
-    const tg = this.terrainGraphics;
-
-    // Choose styling colors based on theme
-    let leftGraveCol = 0x8c6239; // Brown dirt
-    let leftTopCol = 0x5e8c50;   // Green grass cap
-    let rightBaseCol = 0x7a8a99; // Grey castle stone
-    let rightTopCol = 0x495057;  // Dark grey top
-    
-    if (this.levelData.themeColor === "#eefbe9") { // Grasslands
-      leftGraveCol = 0x8c6239;
-      leftTopCol = 0x5e8c50;
-      rightBaseCol = 0x868e96;
-      rightTopCol = 0xadb5bd;
-    } else if (this.levelData.themeColor === "#ffd5c6" || this.levelData.themeColor === "#ffede5") { // Volcano
-      leftGraveCol = 0x2b2d42; // Deep obsidian ash
-      leftTopCol = 0xff6b6b;   // Lava fire crust
-      rightBaseCol = 0x1d1e2c; // Black volcanic obsidian
-      rightTopCol = 0xff922b;  // Flame amber orange
-    } else if (this.levelData.themeColor === "#e5f0f8" || this.levelData.themeColor === "#edf1f2") { // Sky / High grounds
-      leftGraveCol = 0xaabecf; // Soft high ground lavender
-      leftTopCol = 0x74c0fc;   // Ice bright blue cap
-      rightBaseCol = 0x495057; // Cloud palace silver
-      rightTopCol = 0xdee2e6;  // White marble crown
-    } else { // Industrial or generic
-      leftGraveCol = 0x495057;
-      leftTopCol = 0xaabecf;
-      rightBaseCol = 0x343a40;
-      rightTopCol = 0xf1f3f5;
-    }
-
-    // Choose styling contrast colors for spikes/brick outlines
-    let grassBladeCol = 0x406635;
-    let gridLineCol = 0x5c636a;
-    
-    if (this.levelData.themeColor === "#eefbe9") {
-      grassBladeCol = 0x406635;
-      gridLineCol = 0x5c636a;
-    } else if (this.levelData.themeColor === "#ffd5c6" || this.levelData.themeColor === "#ffede5") {
-      grassBladeCol = 0xe03131; // molten red spikes
-      gridLineCol = 0x090a0f;    // dark borders
-    } else if (this.levelData.themeColor === "#e5f0f8" || this.levelData.themeColor === "#edf1f2") {
-      grassBladeCol = 0x339af0; // dark frost blue spikes
-      gridLineCol = 0x343a40;    // dark stone lines
-    }
-
-    // Draw Left Cliff (Player side: x = 0 to 420)
-    tg.fillStyle(leftGraveCol, 1);
-    tg.fillRect(0, this.playerBaseY, 420, height - this.playerBaseY);
-    tg.fillStyle(leftTopCol, 1);
-    tg.fillRect(0, this.playerBaseY, 420, 16); // cap
-    
-    // Tiny grass blades on Player side
-    tg.fillStyle(grassBladeCol, 1);
-    for (let gx = 15; gx < 410; gx += 30) {
-      tg.fillTriangle(gx, this.playerBaseY, gx + 6, this.playerBaseY - 8, gx + 12, this.playerBaseY);
-    }
-
-    // Draw Right Cliff (Enemy side: x = 650 to 1024)
-    tg.fillStyle(rightBaseCol, 1);
-    tg.fillRect(650, this.enemyBaseY, 374, height - this.enemyBaseY);
-    tg.fillStyle(rightTopCol, 1);
-    tg.fillRect(650, this.enemyBaseY, 374, 16); // cap
-    
-    // Draw brick outline patterns on right fortress cliff
-    tg.lineStyle(2, gridLineCol, 0.5);
-    for (let rx = 650; rx <= 1024; rx += 38) {
-      tg.lineBetween(rx, this.enemyBaseY + 16, rx, height);
-    }
-    for (let ry = this.enemyBaseY + 16; ry < height; ry += 32) {
-      tg.lineBetween(650, ry, 1024, ry);
-    }
+    this.drawTerrain();
 
     // Create the hazard graphics object
     this.hazardGraphics = this.add.graphics();
@@ -373,6 +527,7 @@ export class GameScene extends Scene {
 
     // Initialize trajectory draw buffer
     this.trajectoryGraphics = this.add.graphics();
+    this.healthBarGraphics = this.add.graphics();
 
     // 2. Setup Matter physics boundaries
     // Ground bed (at the deep valley bottom across the whole width as base, plus left/right static cliffs)
@@ -398,6 +553,24 @@ export class GameScene extends Scene {
       friction: 0.9,
       restitution: 0.1
     });
+
+    // Spawn physical mid-hills matching the visual geometries
+    if (this.hasMiddleHill1) {
+      this.matter.add.rectangle(535, 480 + 60, 110, 120, {
+        isStatic: true,
+        label: "ground",
+        friction: 0.9,
+        restitution: 0.1
+      });
+    }
+    if (this.hasMiddleHill2) {
+      this.matter.add.rectangle(540, 420 + 90, 80, 180, {
+        isStatic: true,
+        label: "ground",
+        friction: 0.9,
+        restitution: 0.1
+      });
+    }
 
     // 3. Assemble Fortress Blocks
     this.levelData.blocks.forEach(block => {
@@ -488,7 +661,7 @@ export class GameScene extends Scene {
     // If projectile is active, monitor its motion limits
     if (this.activeProjectile) {
       const body = this.activeProjectile.body;
-      if (body) {
+      if (body && body.position) {
         // Apply micro wind force to projectiles
         const windXForce = this.windSystem.getForceX(body.mass);
         this.matter.body.applyForce(body, body.position, { x: windXForce, y: 0 });
@@ -557,6 +730,51 @@ export class GameScene extends Scene {
         }
       }
     }
+
+    // Static Launcher Frame autoredraw
+    if (!this.isAiming) {
+      this.trajectoryGraphics.clear();
+      this.drawLauncherStand();
+    }
+
+    // Dynamic Crater hollow physics: Slide overlapping blocks or enemies downwards in craters
+    if (this.craters.length > 0) {
+      this.blockBodies.forEach((block) => {
+        if (block && block.body && block.body.position) {
+          this.craters.forEach((crater) => {
+            const dx = block.x - crater.x;
+            const dy = block.y - crater.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < crater.radius) {
+              const angle = Math.atan2(dy, dx);
+              this.matter.body.applyForce(block.body, block.body.position, {
+                x: Math.cos(angle) * 0.0003 * block.body.mass,
+                y: 0.0008 * block.body.mass
+              });
+            }
+          });
+        }
+      });
+
+      this.enemyBodies.forEach((enemy) => {
+        if (enemy && enemy.body && enemy.body.position) {
+          this.craters.forEach((crater) => {
+            const dx = enemy.x - crater.x;
+            const dy = enemy.y - crater.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < crater.radius) {
+              const angle = Math.atan2(dy, dx);
+              this.matter.body.applyForce(enemy.body, enemy.body.position, {
+                x: Math.cos(angle) * 0.0004 * enemy.body.mass,
+                y: 0.001 * enemy.body.mass
+              });
+            }
+          });
+        }
+      });
+    }
+
+    this.drawHealthBars();
   }
 
   private updateHazardLiquid() {
@@ -604,6 +822,56 @@ export class GameScene extends Scene {
     hg.strokePath();
   }
 
+  private drawHealthBars() {
+    if (!this.healthBarGraphics) return;
+
+    const hg = this.healthBarGraphics;
+    hg.clear();
+
+    // 1. Draw Player Health Bar above the player's head
+    if (this.activePlayerUnit && this.activePlayerUnit.active && this.activePlayerUnit.body) {
+      const px = this.activePlayerUnit.x;
+      const py = this.activePlayerUnit.y - 35; // Position above head
+
+      const width = 45;
+      const height = 6;
+      const pct = Phaser.Math.Clamp(this.playerHp / this.playerMaxHp, 0, 1);
+
+      // Draw background border (dark grey/black)
+      hg.fillStyle(0x000000, 0.6);
+      hg.fillRect(px - width / 2 - 1, py - 1, width + 2, height + 2);
+
+      // Draw fill color (green transition to red based on health percentage)
+      const color = pct > 0.5 ? 0x40c057 : pct > 0.25 ? 0xfcc419 : 0xfa5252;
+      hg.fillStyle(color, 1.0);
+      hg.fillRect(px - width / 2, py, width * pct, height);
+    }
+
+    // 2. Draw Enemies Health Bars
+    this.enemyBodies.forEach((enemy) => {
+      if (enemy && enemy.active && enemy.body) {
+        const record = this.enemyHealthMap.get(enemy.body);
+        if (record) {
+          const ex = enemy.x;
+          const ey = enemy.y - 28; // Position above enemy head
+
+          const width = 36;
+          const height = 5;
+          const pct = Phaser.Math.Clamp(record.hp / record.maxHp, 0, 1);
+
+          // Draw background border (dark grey/black)
+          hg.fillStyle(0x000000, 0.6);
+          hg.fillRect(ex - width / 2 - 1, ey - 1, width + 2, height + 2);
+
+          // Draw fill color (orange-red for enemies)
+          const color = pct > 0.5 ? 0xfa5252 : pct > 0.25 ? 0xfd7e14 : 0xe03131;
+          hg.fillStyle(color, 1.0);
+          hg.fillRect(ex - width / 2, ey, width * pct, height);
+        }
+      }
+    });
+  }
+
   private spawnSplashEffects(x: number, y: number) {
     let tint = 0x339af0;
     if (this.levelData.themeColor === "#ffd5c6" || this.levelData.themeColor === "#ffede5") {
@@ -630,17 +898,24 @@ export class GameScene extends Scene {
   // --- Entity Spawning Helper Methods ---
 
   private spawnBlock(data: BlockData) {
-    const maxHp = DamageSystem.getMaterialMaxHp(data.material);
-    const density = data.material === 'metal' ? 0.05 : data.material === 'stone' ? 0.03 : 0.015;
-    const friction = data.material === 'metal' ? 0.15 : 0.4;
-    const restitution = data.material === 'glass' ? 0.1 : data.material === 'wood' ? 0.2 : 0.05;
+    let materialVal = data.material;
+    
+    // Avoid spontaneous TNT explosions ending the game instantly on scene load by converting them to wood!
+    if (materialVal === 'tnt') {
+      materialVal = 'wood';
+    }
+
+    const maxHp = DamageSystem.getMaterialMaxHp(materialVal);
+    const density = materialVal === 'metal' ? 0.05 : materialVal === 'stone' ? 0.03 : 0.015;
+    const friction = materialVal === 'metal' ? 0.15 : 0.4;
+    const restitution = materialVal === 'glass' ? 0.1 : materialVal === 'wood' ? 0.2 : 0.05;
 
     // Matter physical rectangle
-    const block = this.matter.add.image(data.x, data.y, `block_${data.material}`, undefined, {
+    const block = this.matter.add.image(data.x, data.y, `block_${materialVal}`, undefined, {
       friction,
       restitution,
       density,
-      label: `block_${data.material}`
+      label: `block_${materialVal}`
     });
 
     block.setFriction(friction);
@@ -656,12 +931,13 @@ export class GameScene extends Scene {
     this.blockHealthMap.set(block.body, {
       hp: maxHp,
       maxHp,
-      material: data.material
+      material: materialVal
     });
   }
 
   private spawnEnemy(data: EnemyPosition) {
-    const maxHp = data.hp;
+    const scaleFactor = 8;
+    const maxHp = data.hp * scaleFactor;
     // Slime or enemy capsule
     const enemy = this.matter.add.image(data.x, data.y, 'enemy_standard', undefined, {
       shape: { type: 'circle', radius: 17 },
@@ -784,19 +1060,74 @@ export class GameScene extends Scene {
 
     const points = TrajectorySystem.predict(sx, sy, vx, vy, gX, gY, wX, 35, 1.25);
 
-    // Draw lines/dots
-    this.trajectoryGraphics.lineStyle(1.5, 0xadb5bd, 1);
-    this.trajectoryGraphics.fillStyle(0xe03131, 0.9); // Highlight red dot at the tip
-
+    // 1. Draw glowing trajectory dots
+    this.trajectoryGraphics.lineStyle(1.5, 0xffffff, 0.5);
+    this.trajectoryGraphics.fillStyle(0x38d9a9, 0.9); // Beautiful neon mint green dots!
+    
     points.forEach((pt, i) => {
       if (i % 2 === 0) {
-        this.trajectoryGraphics.fillCircle(pt.x, pt.y, 4 - (i * 0.05));
+        // Dot gets smaller further down the trajectory
+        this.trajectoryGraphics.fillCircle(pt.x, pt.y, Math.max(1, 5 - (i * 0.12)));
       }
     });
 
-    // Draw visual rubberband string connect!
-    this.trajectoryGraphics.lineStyle(3, 0x495057, 0.7);
-    this.trajectoryGraphics.lineBetween(this.levelData.playerStart.x, this.levelData.playerStart.y, this.activePlayerUnit.x, this.activePlayerUnit.y);
+    // 2. Draw sophisticated double slingshot bands
+    const leftProngX = sx - 18;
+    const leftProngY = sy - 22;
+    const rightProngX = sx + 18;
+    const rightProngY = sy - 22;
+
+    const dragX = this.activePlayerUnit.x;
+    const dragY = this.activePlayerUnit.y;
+
+    // Draw elastic shadow lines for rich 3D appearance
+    this.trajectoryGraphics.lineStyle(6, 0x1a1c23, 0.45);
+    this.trajectoryGraphics.lineBetween(leftProngX, leftProngY, dragX, dragY);
+    this.trajectoryGraphics.lineBetween(rightProngX, rightProngY, dragX, dragY);
+
+    // Draw primary bands (Sleek high-tech neon amber bands)
+    this.trajectoryGraphics.lineStyle(3, 0xfd7e14, 0.85);
+    this.trajectoryGraphics.lineBetween(leftProngX, leftProngY, dragX, dragY);
+    this.trajectoryGraphics.lineBetween(rightProngX, rightProngY, dragX, dragY);
+
+    // Draw holding pocket leather cradle around the unit
+    this.trajectoryGraphics.fillStyle(0x495057, 1);
+    this.trajectoryGraphics.lineStyle(1.5, 0xadb5bd, 1);
+    this.trajectoryGraphics.fillCircle(dragX, dragY, 5);
+    this.trajectoryGraphics.strokeCircle(dragX, dragY, 5);
+
+    // 3. Draw parent launcher stand over bands
+    this.drawLauncherStand();
+
+    // 4. Draw stylish power meter concentric arcs
+    // Max pull is around 100 pixels
+    const dx = sx - dragX;
+    const dy = sy - dragY;
+    const pullDistance = Math.sqrt(dx * dx + dy * dy);
+    const pullRatio = Phaser.Math.Clamp(pullDistance / 100, 0, 1);
+
+    // Arc color changes smoothly: Green (low power) -> Yellow (moderate) -> Red (extreme!)
+    let arcColor = 0x40c057; // bright green
+    if (pullRatio > 0.4 && pullRatio <= 0.8) {
+      arcColor = 0xfcc419; // warning yellow
+    } else if (pullRatio > 0.8) {
+      arcColor = 0xfa5252; // bright red
+    }
+
+    // Draw tactical reticle ring around active player unit
+    this.trajectoryGraphics.lineStyle(1.5, arcColor, 0.4 + (pullRatio * 0.4));
+    this.trajectoryGraphics.strokeCircle(dragX, dragY, 18 + (pullRatio * 12));
+
+    // Crosshair ticks
+    this.trajectoryGraphics.lineStyle(1, arcColor, 0.6);
+    this.trajectoryGraphics.lineBetween(dragX - 25, dragY, dragX + 25, dragY);
+    this.trajectoryGraphics.lineBetween(dragX, dragY - 25, dragX, dragY + 25);
+
+    // Draw elegant glowing charge bar over the launcher stand!
+    this.trajectoryGraphics.fillStyle(arcColor, 0.8);
+    this.trajectoryGraphics.fillRect(sx - 20, sy + 15, 40 * pullRatio, 4);
+    this.trajectoryGraphics.lineStyle(1, 0xffffff, 0.3);
+    this.trajectoryGraphics.strokeRect(sx - 20, sy + 15, 40, 4);
   }
 
   /**
@@ -882,6 +1213,7 @@ export class GameScene extends Scene {
       shape: { type: 'circle', radius: weaponData.radius },
       density: 0.03 * weaponData.weight,
       friction: 0.1,
+      frictionAir: 0.0, // Eliminate air resistance so trajectories perfectly track predictive dots and AI solvers!
       restitution: weaponData.elasticity,
       label: isEnemyWeapon ? 'enemy_projectile' : 'projectile'
     });
@@ -964,7 +1296,9 @@ export class GameScene extends Scene {
         otherBody.gameObject.setAlpha(Math.max(0.3, record.hp / record.maxHp));
       }
 
-      this.spawnDebris(otherBody.position.x, otherBody.position.y, record.material, 5);
+      const pX = (otherBody && otherBody.position && typeof otherBody.position.x === 'number') ? otherBody.position.x : (otherBody && otherBody.gameObject ? otherBody.gameObject.x : 0);
+      const pY = (otherBody && otherBody.position && typeof otherBody.position.y === 'number') ? otherBody.position.y : (otherBody && otherBody.gameObject ? otherBody.gameObject.y : 0);
+      this.spawnDebris(pX, pY, record.material, 5);
 
       if (record.hp <= 0) {
         this.destroyBlock(otherBody);
@@ -981,28 +1315,54 @@ export class GameScene extends Scene {
       // Zoom camera momentarily for high-impact cinematic feedback!
       this.cameras.main.shake(100, 0.008);
 
+      const pX = (otherBody && otherBody.position && typeof otherBody.position.x === 'number') ? otherBody.position.x : (otherBody && otherBody.gameObject ? otherBody.gameObject.x : 0);
+      const pY = (otherBody && otherBody.position && typeof otherBody.position.y === 'number') ? otherBody.position.y : (otherBody && otherBody.gameObject ? otherBody.gameObject.y : 0);
+
       // Spawn bloody green sparks
-      this.spawnDebris(otherBody.position.x, otherBody.position.y, 'tnt', 8);
+      this.spawnDebris(pX, pY, 'tnt', 8);
+
+      this.spawnFloatingTxt(pX, pY - 25, `-${dmg} DMG`, '#ffa94d');
 
       if (record.hp <= 0) {
         this.destroyEnemy(otherBody);
       }
     }
 
-    // 4. Check for special splash ammo explosions (TNT or standard bomb)
+    // 4. Handle player damage
+    if (this.activePlayerUnit && otherBody === this.activePlayerUnit.body) {
+      const isProjectileEnemy = (this.activeProjectile as any).isEnemy;
+      const dmg = Math.round(velocityMag * wInfo.weight * (isProjectileEnemy ? 12 : 6));
+      this.playerHp = Phaser.Math.Clamp(this.playerHp - dmg, 0, this.playerMaxHp);
+      
+      // Flash screen red and play pain alert beep
+      this.cameras.main.flash(120, 240, 50, 50);
+      this.playBeep(185, 0.15);
+
+      this.spawnFloatingTxt(this.activePlayerUnit.x, this.activePlayerUnit.y - 30, `-${dmg} HP`, '#fa5252');
+
+      this.spawnDebris(this.activePlayerUnit.x, this.activePlayerUnit.y, 'wood', 4);
+    }
+
+    // 5. Check for special splash ammo explosions (TNT or standard bomb)
     const isEnemy = (this.activeProjectile as any).isEnemy;
     if (wInfo.specialEffect === 'explode' || wInfo.specialEffect === 'gravity' || wInfo.specialEffect === 'fire' || isEnemy) {
-      this.executeExplosionAt(pBody.position.x, pBody.position.y, wInfo);
+      const pX = (pBody && pBody.position && typeof pBody.position.x === 'number') ? pBody.position.x : (pBody && pBody.gameObject ? pBody.gameObject.x : 0);
+      const pY = (pBody && pBody.position && typeof pBody.position.y === 'number') ? pBody.position.y : (pBody && pBody.gameObject ? pBody.gameObject.y : 0);
+      this.executeExplosionAt(pX, pY, wInfo);
     }
 
     this.notifyHUD();
   }
 
   private handleGenericPhysicalImpact(bodyA: any, bodyB: any) {
+    if (this.time.now - this.sceneStartTime < 4000) {
+      return; // Ignore default settlement toppling damage on scene start!
+    }
+
     // Blocks to block or blocks to enemy toppling damage
     // Based on relative velocities
     const vDiff = Math.abs(bodyA.speed - bodyB.speed);
-    if (vDiff < 1.2) return;
+    if (vDiff < 3.2) return;
 
     [bodyA, bodyB].forEach((b) => {
       // If it is a block
@@ -1019,9 +1379,14 @@ export class GameScene extends Scene {
       // If it is an enemy
       if (this.enemyHealthMap.has(b)) {
         const record = this.enemyHealthMap.get(b)!;
-        const dmg = Math.round(vDiff * 10);
+        const dmg = Math.round(vDiff * 15);
         if (dmg > 5) {
           record.hp -= dmg;
+          
+          const pX = (b && b.position && typeof b.position.x === 'number') ? b.position.x : (b && b.gameObject ? b.gameObject.x : 0);
+          const pY = (b && b.position && typeof b.position.y === 'number') ? b.position.y : (b && b.gameObject ? b.gameObject.y : 0);
+          this.spawnFloatingTxt(pX, pY - 25, `-${dmg} HP`, '#ffd43b');
+
           if (record.hp <= 0) this.destroyEnemy(b);
         }
       }
@@ -1029,13 +1394,17 @@ export class GameScene extends Scene {
   }
 
   private destroyBlock(b: any) {
+    if (!b) return;
     if (!this.blockHealthMap.has(b)) return;
     const record = this.blockHealthMap.get(b)!;
     this.score += 200; // Block destruction score bonus
 
+    const posX = (b.position && typeof b.position.x === 'number') ? b.position.x : (b.gameObject ? b.gameObject.x : 0);
+    const posY = (b.position && typeof b.position.y === 'number') ? b.position.y : (b.gameObject ? b.gameObject.y : 0);
+
     // Fire explosive chain reaction if it's a TNT box
     if (record.material === 'tnt') {
-      this.executeExplosionAt(b.position.x, b.position.y, {
+      this.executeExplosionAt(posX, posY, {
          explosionRadius: 130,
          damage: 150,
          specialEffect: 'explode'
@@ -1043,7 +1412,7 @@ export class GameScene extends Scene {
     }
 
     // Clear and remove physical body
-    this.spawnDebris(b.position.x, b.position.y, record.material, 12);
+    this.spawnDebris(posX, posY, record.material, 12);
     this.blockHealthMap.delete(b);
     this.blockBodies = this.blockBodies.filter(item => item.body !== b);
 
@@ -1054,11 +1423,15 @@ export class GameScene extends Scene {
   }
 
   private destroyEnemy(b: any) {
+    if (!b) return;
     if (!this.enemyHealthMap.has(b)) return;
     const record = this.enemyHealthMap.get(b)!;
     this.score += 1500; // Massive score bonus
 
-    this.spawnDebris(b.position.x, b.position.y, 'tnt', 16);
+    const posX = (b.position && typeof b.position.x === 'number') ? b.position.x : (b.gameObject ? b.gameObject.x : 0);
+    const posY = (b.position && typeof b.position.y === 'number') ? b.position.y : (b.gameObject ? b.gameObject.y : 0);
+
+    this.spawnDebris(posX, posY, 'tnt', 16);
     this.enemyHealthMap.delete(b);
     this.enemyBodies = this.enemyBodies.filter(item => item.body !== b);
 
@@ -1080,25 +1453,57 @@ export class GameScene extends Scene {
     const radius = weapon.explosionRadius || 80;
     const maxDamage = weapon.damage * 1.5;
 
-    // Draw visual explosion burst cloud
-    const fireCircles = this.add.graphics();
-    fireCircles.fillStyle(weapon.specialEffect === 'gravity' ? 0x7048e8 : 0xff761b, 0.85);
-    fireCircles.fillCircle(exX, exY, radius);
+    // Use a real Phaser Arc Game Object (circle) which scales from center (exX, exY) and handles alpha perfectly
+    const burstColor = weapon.specialEffect === 'gravity' ? 0x7048e8 : 0xff761b;
+    const fireCircle = this.add.circle(exX, exY, radius, burstColor, 0.85);
     
     this.tweens.add({
-      targets: fireCircles,
+      targets: fireCircle,
       alpha: 0,
-      scaleX: 1.15,
-      scaleY: 1.15,
+      scale: 1.3,
       duration: 350,
-      onComplete: () => fireCircles.destroy()
+      onComplete: () => fireCircle.destroy()
     });
 
     this.cameras.main.shake(180, 0.018);
     this.playBeep(90, 0.35);
 
+    // Calculate crater radius first to perform precise overlapping check
+    let craterRadius = 24 + Math.random() * 8;
+    if (weapon.specialEffect === 'explode') craterRadius = 38;
+    if (weapon.specialEffect === 'gravity') craterRadius = 45;
+    if (weapon.id === 'bomb') craterRadius = 40;
+
+    // Helper to evaluate if explosion actually overlaps physical land platforms or hills (not empty sky)
+    const overlapsLand = (x: number, y: number, r: number) => {
+      // Left land player platform
+      if (x >= -r && x <= 420 + r && y >= this.playerBaseY - r) return true;
+      // Right land enemy platform
+      if (x >= 650 - r && x <= 1024 + r && y >= this.enemyBaseY - r) return true;
+      // Mid hill 1
+      if (this.hasMiddleHill1 && x >= 480 - r && x <= 590 + r && y >= 480 - r) return true;
+      // Mid hill 2
+      if (this.hasMiddleHill2 && x >= 500 - r && x <= 580 + r && y >= 420 - r) return true;
+      return false;
+    };
+
+    // ONLY generate a crater if the explosion overlaps physical terra-firma (avoids floating circle indicators in sky!)
+    if (overlapsLand(exX, exY, craterRadius)) {
+      this.craters.push({
+        x: exX,
+        y: Phaser.Math.Clamp(exY, 200, 580), // Clamp crater center so it hollows out terrain perfectly
+        radius: craterRadius
+      });
+      // Limit total saved craters list to improve performance
+      if (this.craters.length > 25) {
+        this.craters.shift();
+      }
+      this.drawTerrain();
+    }
+
     // Apply radial physical forces to adjacent dynamic blocks & deal splash damage
     this.blockHealthMap.forEach((record, b) => {
+      if (!b || !b.position) return;
       const dx = b.position.x - exX;
       const dy = b.position.y - exY;
       const dist = Math.sqrt(dx * dx + dy * dy);
@@ -1130,6 +1535,7 @@ export class GameScene extends Scene {
 
     // Enemy explosion solves
     this.enemyHealthMap.forEach((record, b) => {
+      if (!b || !b.position) return;
       const dx = b.position.x - exX;
       const dy = b.position.y - exY;
       const dist = Math.sqrt(dx * dx + dy * dy);
@@ -1147,29 +1553,135 @@ export class GameScene extends Scene {
           y: Math.sin(angle) * pushFactor * b.mass - 0.01
         });
 
+        const pX = (b && b.position && typeof b.position.x === 'number') ? b.position.x : (b && b.gameObject ? b.gameObject.x : 0);
+        const pY = (b && b.position && typeof b.position.y === 'number') ? b.position.y : (b && b.gameObject ? b.gameObject.y : 0);
+        this.spawnFloatingTxt(pX, pY - 25, `-${dmg} HP`, '#fa5252');
+
         if (record.hp <= 0) {
           this.time.delayedCall(10, () => this.destroyEnemy(b));
         }
       }
     });
+
+    // 3. Player explosion splash damage
+    if (this.activePlayerUnit && this.activePlayerUnit.active && this.activePlayerUnit.body) {
+      const pb = this.activePlayerUnit.body;
+      if (pb && pb.position) {
+        const dx = pb.position.x - exX;
+        const dy = pb.position.y - exY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < radius) {
+          const ratio = (radius - dist) / radius;
+          const dmg = Math.round(maxDamage * ratio * 0.85);
+          this.playerHp = Phaser.Math.Clamp(this.playerHp - dmg, 0, this.playerMaxHp);
+
+          // Flash screen red and play pain sound
+          this.cameras.main.flash(100, 240, 50, 50);
+          this.playBeep(180, 0.15);
+
+          // Floating Damage indicator text
+          this.spawnFloatingTxt(this.activePlayerUnit.x, pb.position.y - 35, `-${dmg} HP`, '#fa5252');
+
+          // Apply knockback visual force
+          const pushFactor = ratio * 0.015;
+          const angle = Math.atan2(dy, dx);
+          this.matter.body.applyForce(pb, pb.position, {
+            x: Math.cos(angle) * pushFactor * pb.mass,
+            y: Math.sin(angle) * pushFactor * pb.mass - 0.005
+          });
+        }
+      }
+    }
   }
 
-  // Visual debris cloud burst particles creator
+  // Visual Floating Text popup (damage, points)
+  private spawnFloatingTxt(x: number, y: number, txt: string, col: string) {
+    const ftext = this.add.text(x, y, txt, {
+      fontFamily: 'system-ui, sans-serif',
+      fontSize: '15px',
+      fontStyle: 'extrabold',
+      color: col,
+      stroke: '#000000',
+      strokeThickness: 3
+    }).setOrigin(0.5);
+
+    this.tweens.add({
+      targets: ftext,
+      y: y - 35,
+      alpha: 0,
+      duration: 1000,
+      ease: 'Cubic.out',
+      onComplete: () => ftext.destroy()
+    });
+  }
+
+  // Physical and visual debris burst creator
   private spawnDebris(x: number, y: number, material: MaterialType, qty: number) {
     const col = DamageSystem.getMaterialColor(material);
+    let targetTint = 0x868e96;
+    if (material === 'wood') targetTint = 0xbc8f8f;
+    else if (material === 'stone') targetTint = 0x8c8c8c;
+    else if (material === 'metal') targetTint = 0x4a5d6e;
+    else if (material === 'glass') targetTint = 0xb0e0e6;
+    else if (material === 'tnt') targetTint = 0xd9534f;
+
+    // 1. Spawns visual particle sparks
     const emitter = this.add.particles(x, y, 'fire_particle', {
       scale: { start: 1.2, end: 0.1 },
       alpha: { start: 0.9, end: 0 },
-      tint: col,
+      tint: targetTint,
       speed: { min: 80, max: 240 },
       angle: { min: 0, max: 360 },
       lifespan: { min: 400, max: 1000 },
       gravityY: 400,
       maxParticles: qty
     });
-    
-    // Auto purge emitter
     this.time.delayedCall(1200, () => emitter.destroy());
+
+    // 2. Spawn real rollable, physical Matter debris fragments!
+    // "상대가 공격할 때 원자재가 남고 잔재가 남는다"
+    const numDebris = Math.min(3, Math.max(1, Math.floor(qty / 4))); // Spawn 1 to 3 dynamic physical pieces
+
+    for (let i = 0; i < numDebris; i++) {
+      const size = Phaser.Math.Between(13, 18);
+      const debrisKey = `block_${material}`;
+
+      // Spawn slightly offset to avoid overlapping instantly
+      const rx = x + Phaser.Math.Between(-12, 12);
+      const ry = y + Phaser.Math.Between(-12, 12);
+
+      const item = this.matter.add.image(rx, ry, debrisKey, undefined, {
+        shape: { type: 'rectangle', width: size, height: size },
+        friction: 0.8,
+        frictionAir: 0.02,
+        restitution: 0.15,
+        density: 0.008,
+        label: 'debris'
+      });
+
+      item.setDisplaySize(size, size);
+      item.setAngle(Math.random() * 360);
+
+      // Give a small blast shockwave drift impetus!
+      const angle = Math.random() * Math.PI * 2;
+      const speed = Phaser.Math.FloatBetween(2.0, 5.0);
+      this.matter.body.setVelocity(item.body as any, {
+        x: Math.cos(angle) * speed,
+        y: Math.sin(angle) * speed - 1.5 // bounce upwards slightly
+      });
+
+      this.physicalDebrisList.push(item);
+
+      // Keep maximum persistent physical debris capped to 40 for hardware efficiency
+      if (this.physicalDebrisList.length > 40) {
+        const oldest = this.physicalDebrisList.shift();
+        if (oldest) {
+          this.matter.world.remove(oldest.body as any);
+          oldest.destroy();
+        }
+      }
+    }
   }
 
   // --- Turn Loop Solvers ---
@@ -1252,33 +1764,61 @@ export class GameScene extends Scene {
       return;
     }
 
-    // Aim calculations targeting player starting zone
-    const targetX = this.levelData.playerStart.x;
-    const targetY = this.levelData.playerStart.y;
-    const selfX = shootingEnemyBody.x;
-    const selfY = shootingEnemyBody.y;
+    // Precise launch coordinates matching where the projectile is actually spawned in spawnAndLaunchProjectile
+    const launchStartX = shootingEnemyBody.x - 40;
+    const launchStartY = shootingEnemyBody.y - 40;
 
-    // Basic artillery aiming: ballistic offset
-    const dx = targetX - selfX;
-    const dy = targetY - selfY - 80; // Aim with moderate arch
+    // High lobbing parabolic calculations (with beautiful flight curvature)
+    const targetX = this.activePlayerUnit ? this.activePlayerUnit.x : this.levelData.playerStart.x;
+    const targetY = this.activePlayerUnit ? this.activePlayerUnit.y : this.levelData.playerStart.y;
 
-    // Enemy AI accuracy factor determined by Level difficulty
-    // Level 1-3: very inaccurate. Level 10-12: highly accurate!
-    const accuracyNoise = (4 - Math.min(3, Math.floor(this.levelData.id / 3))) * 25;
-    const rdx = dx + (Math.random() * 2 - 1) * accuracyNoise;
-    const rdy = dy + (Math.random() * 2 - 1) * accuracyNoise;
+    // We want the mortar to climb 200-280px above heights to clear shield cover beautifully
+    const heightApex = 240 + Math.random() * 50;
+    const peakY = Math.min(launchStartY, targetY) - heightApex;
 
-    // Apply wind adjustment mitigation: Smart enemies adjust slightly to strong winds
-    const windEffect = this.windSystem.getStrength() * 4.5;
-    const finalDx = rdx - windEffect; 
+    // Matter physics gravity constant used for standard calculations is 0.40
+    const g = 0.40;
 
-    // Convert spacing vector into launch impulse speed
-    const scaleFactor = 0.045;
-    const vx = finalDx * scaleFactor;
-    const vy = rdy * scaleFactor;
+    // Analytical flight segment solver
+    const t_up = Math.sqrt(2 * Math.max(15, launchStartY - peakY) / g);
+    const t_down = Math.sqrt(2 * Math.max(15, targetY - peakY) / g);
+    const t_total = t_up + t_down;
+
+    const totalDX = targetX - launchStartX;
+
+    // Exact wind compensator: matches player-side trajectory prediction: const wX = strength * 0.006
+    const wX = this.windSystem.getStrength() * 0.006;
+    let baseVx = (totalDX - 0.5 * wX * t_total * t_total) / t_total;
+
+    // Base vertical launch speed required to climb to the peakY altitude
+    const baseVy = -g * t_up;
+
+    // Smart level-based accuracy tuning (making low levels moderately easy but higher level bosses ruthless snipers!)
+    const levelIndex = this.levelData.id;
+    let noiseRange = 0.4;
+    if (levelIndex === 1) {
+      noiseRange = 0.5; // Level 1: Moderate dispersion (makes them threat, but gives breathing room)
+    } else if (levelIndex === 2) {
+      noiseRange = 0.35; // Level 2: Better aiming
+    } else if (levelIndex === 3) {
+      noiseRange = 0.22; // Level 3: Competitive aiming
+    } else if (levelIndex >= 4 && levelIndex <= 6) {
+      noiseRange = 0.12; // Level 4-6: Highly dangerous, very small dispersion
+    } else if (levelIndex >= 7 && levelIndex <= 9) {
+      noiseRange = 0.04; // Level 7-9: Extreme precision
+    } else {
+      noiseRange = 0.01; // Level 10-12 (Final Bosses): Ruthless sniper precision, perfect targeting!
+    }
+
+    const finalVx = baseVx + (Math.random() * 2 - 1) * noiseRange;
+    const finalVy = baseVy + (Math.random() * 2 - 1) * noiseRange;
+
+    // Speed vector scaling match
+    const impulseSpeedX = finalVx * 0.165;
+    const impulseSpeedY = finalVy * 0.165;
 
     this.time.delayedCall(400, () => {
-      this.spawnAndLaunchProjectile(vx, vy, true);
+      this.spawnAndLaunchProjectile(impulseSpeedX, impulseSpeedY, true);
     });
   }
 
@@ -1288,7 +1828,34 @@ export class GameScene extends Scene {
       this.triggerGameResult(true);
       return true;
     }
+    // Also check if player HP has reached zero!
+    if (this.playerHp <= 0) {
+      this.triggerGameResult(false);
+      return true;
+    }
     return false;
+  }
+
+  // Allow manual horizontal move from React HUD touch buttons or cursors
+  public triggerManualMove(dx: number) {
+    if (!this.isPlayerTurn || this.activeProjectile || !this.activePlayerUnit) return;
+    const nextX = Phaser.Math.Clamp(this.activePlayerUnit.x + dx, 50, 420);
+    this.activePlayerUnit.setPosition(nextX, this.activePlayerUnit.y);
+    
+    this.levelData.playerStart.x = nextX;
+    this.levelData.playerStart.y = this.activePlayerUnit.y;
+    
+    if (this.playerAnchorBody) {
+      this.matter.body.setPosition(this.playerAnchorBody, { x: nextX, y: this.activePlayerUnit.y });
+    }
+    
+    // Animate a quick bobbing lift
+    this.activePlayerUnit.setAngle(dx > 0 ? 15 : -15);
+    this.time.delayedCall(160, () => {
+      if (this.activePlayerUnit) this.activePlayerUnit.setAngle(0);
+    });
+    
+    this.notifyHUD();
   }
 
   private triggerGameResult(isWin: boolean) {
@@ -1342,7 +1909,7 @@ export class GameScene extends Scene {
       enemiesLeft: this.enemyBodies.length,
       enemiesTotal: this.levelData.enemies.length,
       // Pass player and first enemy health percentage
-      playerHp: this.activePlayerUnit ? 100 : 0, 
+      playerHp: Math.round((this.playerHp / this.playerMaxHp) * 100), 
       activeProjectileActive: this.activeProjectile !== null
     };
 
@@ -1370,8 +1937,243 @@ export class GameScene extends Scene {
       
       osc.start();
       osc.stop(ctx.currentTime + duration);
+
+      osc.onended = () => {
+        ctx.close().catch(() => {});
+      };
     } catch (e) {
       // Audio context might be blocked
     }
+  }
+
+  // --- Theme-driven customized visual terrain drawing & destructible craters ---
+
+  private drawTerrain() {
+    if (!this.terrainGraphics) return;
+    const tg = this.terrainGraphics;
+    tg.clear();
+    const height = 600;
+
+    // Choose styling colors based on theme
+    let leftGraveCol = 0x8c6239; // Brown dirt
+    let leftTopCol = 0x5e8c50;   // Green grass cap
+    let rightBaseCol = 0x7a8a99; // Grey castle stone
+    let rightTopCol = 0x495057;  // Dark grey top
+    
+    if (this.levelData.themeColor === "#eefbe9") { // Grasslands
+      leftGraveCol = 0x8c6239;
+      leftTopCol = 0x5e8c50;
+      rightBaseCol = 0x868e96;
+      rightTopCol = 0xadb5bd;
+    } else if (this.levelData.themeColor === "#ffd5c6" || this.levelData.themeColor === "#ffede5") { // Volcano
+      leftGraveCol = 0x2b2d42; // Deep obsidian ash
+      leftTopCol = 0xff6b6b;   // Lava fire crust
+      rightBaseCol = 0x1d1e2c; // Black volcanic obsidian
+      rightTopCol = 0xff922b;  // Flame amber orange
+    } else if (this.levelData.themeColor === "#e5f0f8" || this.levelData.themeColor === "#edf1f2") { // Sky / High grounds
+      leftGraveCol = 0xaabecf; // Soft high ground lavender
+      leftTopCol = 0x74c0fc;   // Ice bright blue cap
+      rightBaseCol = 0x495057; // Cloud palace silver
+      rightTopCol = 0xdee2e6;  // White marble crown
+    } else if (this.levelData.themeColor === "#e6f8f5") { // Greenhouse
+      leftGraveCol = 0x3b5bdb;
+      leftTopCol = 0x12b886;
+      rightBaseCol = 0x087f5b;
+      rightTopCol = 0x12b886;
+    } else if (this.levelData.themeColor === "#f5f5f7") { // Factory Industrial
+      leftGraveCol = 0x495057;
+      leftTopCol = 0xadb5bd;
+      rightBaseCol = 0x212529;
+      rightTopCol = 0xadb5bd;
+    } else if (this.levelData.themeColor === "#fbf3db" || this.levelData.themeColor === "#fdf3e7") { // Desert
+      leftGraveCol = 0x8c6239; 
+      leftTopCol = 0xe67e22; 
+      rightBaseCol = 0x7e5109;
+      rightTopCol = 0xf5b041;
+    } else if (this.levelData.themeColor === "#fdf8ef") { // Retreat
+      leftGraveCol = 0x5c3d2e;
+      leftTopCol = 0x865439;
+      rightBaseCol = 0x3d2b1f;
+      rightTopCol = 0xa87c66;
+    } else if (this.levelData.themeColor === "#fdfbff" || this.levelData.themeColor === "#f6f3fc") { // Cyber/Marble
+      leftGraveCol = 0x321f64;
+      leftTopCol = 0x8250df;
+      rightBaseCol = 0x1a0f3d;
+      rightTopCol = 0xd2a6ff;
+    } else { // Industrial or generic
+      leftGraveCol = 0x495057;
+      leftTopCol = 0xaabecf;
+      rightBaseCol = 0x343a40;
+      rightTopCol = 0xf1f3f5;
+    }
+
+    // Choose styling contrast colors for spikes/brick outlines
+    let grassBladeCol = 0x406635;
+    let gridLineCol = 0x5c636a;
+    
+    if (this.levelData.themeColor === "#eefbe9") {
+      grassBladeCol = 0x406635;
+      gridLineCol = 0x5c636a;
+    } else if (this.levelData.themeColor === "#ffd5c6" || this.levelData.themeColor === "#ffede5") {
+      grassBladeCol = 0xe03131; // molten red spikes
+      gridLineCol = 0x090a0f;    // dark borders
+    } else if (this.levelData.themeColor === "#e5f0f8" || this.levelData.themeColor === "#edf1f2") {
+      grassBladeCol = 0x339af0; // dark frost blue spikes
+      gridLineCol = 0x343a40;    // dark stone lines
+    }
+
+    // 1. Draw Left Cliff (Player side: x = 0 to 420)
+    tg.fillStyle(leftGraveCol, 1);
+    tg.fillRect(0, this.playerBaseY, 420, height - this.playerBaseY);
+    tg.fillStyle(leftTopCol, 1);
+    tg.fillRect(0, this.playerBaseY, 420, 16); // cap
+    
+    // Smooth high grass blades decoration on Player side
+    tg.fillStyle(grassBladeCol, 1);
+    for (let gx = 15; gx < 410; gx += 25) {
+      tg.fillTriangle(gx, this.playerBaseY, gx + 6, this.playerBaseY - 10, gx + 12, this.playerBaseY);
+    }
+
+    // 2. Draw Middle Hill 1 (if active)
+    if (this.hasMiddleHill1) {
+      const midX = 480;
+      const midY = 480;
+      const midW = 110;
+      tg.fillStyle(leftGraveCol, 1);
+      tg.fillRect(midX, midY, midW, height - midY);
+      tg.fillStyle(leftTopCol, 1);
+      tg.fillRect(midX, midY, midW, 12);
+      
+      tg.fillStyle(grassBladeCol, 1);
+      for (let gx = midX + 8; gx < midX + midW - 8; gx += 18) {
+        tg.fillTriangle(gx, midY, gx + 4, midY - 6, gx + 8, midY);
+      }
+    }
+
+    // 3. Draw Middle Hill 2 (if active)
+    if (this.hasMiddleHill2) {
+      const midX = 500;
+      const midY = 420;
+      const midW = 80;
+      tg.fillStyle(rightBaseCol, 1);
+      tg.fillRect(midX, midY, midW, height - midY);
+      tg.fillStyle(rightTopCol, 1);
+      tg.fillRect(midX, midY, midW, 12);
+      
+      tg.lineStyle(1.5, gridLineCol, 0.4);
+      for (let rx = midX + 12; rx < midX + midW; rx += 20) {
+        tg.lineBetween(rx, midY + 12, rx, height);
+      }
+    }
+
+    // 4. Draw Right Cliff (Enemy side: x = 650 to 1024)
+    tg.fillStyle(rightBaseCol, 1);
+    tg.fillRect(650, this.enemyBaseY, 374, height - this.enemyBaseY);
+    tg.fillStyle(rightTopCol, 1);
+    tg.fillRect(650, this.enemyBaseY, 374, 16); // cap
+    
+    // Draw brick outline patterns on right fortress cliff
+    tg.lineStyle(2, gridLineCol, 0.5);
+    for (let rx = 650; rx <= 1024; rx += 38) {
+      tg.lineBetween(rx, this.enemyBaseY + 16, rx, height);
+    }
+    for (let ry = this.enemyBaseY + 16; ry < height; ry += 32) {
+      tg.lineBetween(650, ry, 1024, ry);
+    }
+
+    // 5. Draw Craters (Explosion overlay cutout)
+    // Overlays deep charred circles filled with the sky's actual backdrop gradient for gorgeous 2D hollowing effect!
+    this.craters.forEach((crater) => {
+      // Charred hot impact shell
+      let shellColor = 0x212529;
+      if (this.levelData.theme === "마그마 계곡") {
+        shellColor = 0xff922b; // Fiery volcanic rim!
+      } else if (this.levelData.theme === "앤트로피 궁정" || this.levelData.theme === "대리석 전당") {
+        shellColor = 0x845ef7; // Cosmic purple burn rim!
+      }
+      
+      tg.fillStyle(shellColor, 0.95);
+      tg.fillCircle(crater.x, crater.y, crater.radius + 5);
+
+      // Blends seamlessly into backdrop sky colors
+      const skyGradientColor = this.getSkyColorAt(crater.y);
+      tg.fillStyle(skyGradientColor, 1);
+      tg.fillCircle(crater.x, crater.y, crater.radius);
+    });
+  }
+
+  private getSkyColorAt(y: number): number {
+    let skyTopColor = Phaser.Display.Color.HexStringToColor(this.levelData.themeColor).color;
+    let skyBotColor = 0xeefbf4;
+    
+    if (this.levelData.themeColor === "#eefbe9") { 
+      skyTopColor = 0xbce5fc; 
+      skyBotColor = 0xeefbe9;
+    } else if (this.levelData.themeColor === "#ffd5c6" || this.levelData.themeColor === "#ffede5") { 
+      skyTopColor = 0xfd7e14; 
+      skyBotColor = 0xffede5;
+    } else if (this.levelData.themeColor === "#e5f0f8" || this.levelData.themeColor === "#edf1f2") { 
+      skyTopColor = 0x4dabf7; 
+      skyBotColor = 0xe5f0f8;
+    } else if (this.levelData.themeColor === "#e6f8f5") { 
+      skyTopColor = 0x0c8599; 
+      skyBotColor = 0xe6f8f5;
+    } else if (this.levelData.themeColor === "#f5f5f7") { 
+      skyTopColor = 0xb0b5bc; 
+      skyBotColor = 0xf5f5f7;
+    } else if (this.levelData.themeColor === "#fbf3db" || this.levelData.themeColor === "#fdf3e7") { 
+      skyTopColor = 0xfaad14; 
+      skyBotColor = 0xfdf3e7;
+    } else if (this.levelData.themeColor === "#fdf8ef") { 
+      skyTopColor = 0xd8c29d; 
+      skyBotColor = 0xfdf8ef;
+    } else if (this.levelData.themeColor === "#fdfbff" || this.levelData.themeColor === "#f6f3fc") { 
+      skyTopColor = 0x845ef7; 
+      skyBotColor = 0xf6f3fc;
+    }
+
+    const ratio = Phaser.Math.Clamp(y / 600, 0, 1);
+    
+    const colorA = Phaser.Display.Color.IntegerToColor(skyTopColor);
+    const colorB = Phaser.Display.Color.IntegerToColor(skyBotColor);
+    
+    const blended = Phaser.Display.Color.Interpolate.ColorWithColor(colorA, colorB, 100, ratio * 100);
+    return blended.color;
+  }
+
+  private drawLauncherStand() {
+    if (!this.trajectoryGraphics) return;
+    const tg = this.trajectoryGraphics;
+    
+    // Only display launcher when player is active and projectile is idle
+    if (!this.isPlayerTurn || this.activeProjectile) return;
+
+    const startX = this.levelData.playerStart.x;
+    const startY = this.levelData.playerStart.y;
+    
+    // Sleek physical girder base stand extending to the platform ground
+    tg.lineStyle(5, 0xadb5bd, 1);
+    tg.lineBetween(startX, startY + 5, startX, this.playerBaseY);
+    
+    tg.fillStyle(0x495057, 1);
+    tg.fillCircle(startX, startY + 5, 7);
+    
+    // Left fork prong
+    tg.lineStyle(3, 0x868e96, 1);
+    tg.beginPath();
+    tg.moveTo(startX, startY + 5);
+    tg.lineTo(startX - 18, startY - 22);
+    tg.strokePath();
+
+    // Right fork prong
+    tg.beginPath();
+    tg.moveTo(startX, startY + 5);
+    tg.lineTo(startX + 18, startY - 22);
+    tg.strokePath();
+
+    // Glowing energy emitters on tip of prongs
+    tg.fillStyle(0x38d9a9, 0.95);
+    tg.fillCircle(startX - 18, startY - 22, 4.5);
+    tg.fillCircle(startX + 18, startY - 22, 4.5);
   }
 }

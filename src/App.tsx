@@ -144,68 +144,23 @@ export default function App() {
     }
   };
 
-  // --- Handlers for Slingshot drag tracking ---
-  const handleTouchStart = (e: React.MouseEvent | React.TouchEvent) => {
-    if (!hudState || !hudState.isPlayerTurn || hudState.activeProjectileActive) return;
-    
-    let clientX = 0;
-    let clientY = 0;
-
-    if ('touches' in e) {
-      clientX = e.touches[0].clientX;
-      clientY = e.touches[0].clientY;
-    } else {
-      clientX = e.clientX;
-      clientY = e.clientY;
-    }
-
-    if (touchZoneRef.current) {
-      const rect = touchZoneRef.current.getBoundingClientRect();
-      const relativeX = clientX - rect.left;
-      const relativeY = clientY - rect.top;
-
-      // Ensure click is occurring inside player launch zone sector (roughly left bottom, x < 350)
-      if (relativeX < 360) {
-        setIsSlingshotDragging(true);
-        dragStart.current = { x: relativeX, y: relativeY };
-
-        // Inform phaser scene
-        const activeScene = gameRef.current?.scene.getScene('GameScene') as any;
-        if (activeScene && typeof activeScene.updateAimingDetails === 'function') {
-          activeScene.updateAimingDetails(true, relativeX, relativeY);
-        }
-      }
+  // Move the player horizontally
+  const handleMovePlayer = (dir: 'left' | 'right') => {
+    if (!gameRef.current || !hudState || !hudState.isPlayerTurn || hudState.activeProjectileActive) return;
+    const activeScene = gameRef.current.scene.getScene('GameScene') as any;
+    if (activeScene && typeof activeScene.triggerManualMove === 'function') {
+      activeScene.triggerManualMove(dir === 'left' ? -25 : 25);
     }
   };
 
-  const handleTouchMove = (e: React.MouseEvent | React.TouchEvent) => {
-    if (!isSlingshotDragging || !hudState) return;
-
-    let clientX = 0;
-    let clientY = 0;
-
-    if ('touches' in e) {
-      clientX = e.touches[0].clientX;
-      clientY = e.touches[0].clientY;
-    } else {
-      clientX = e.clientX;
-      clientY = e.clientY;
-    }
-
-    if (touchZoneRef.current) {
-      const rect = touchZoneRef.current.getBoundingClientRect();
-      const relativeX = clientX - rect.left;
-      const relativeY = clientY - rect.top;
-
-      const activeScene = gameRef.current?.scene.getScene('GameScene') as any;
-      if (activeScene && typeof activeScene.updateAimingDetails === 'function') {
-        activeScene.updateAimingDetails(true, relativeX, relativeY);
-      }
-    }
-  };
+  // Keep a reference to see the dragging flag without closures getting stale
+  const isSlingshotDraggingRef = useRef(false);
+  useEffect(() => {
+    isSlingshotDraggingRef.current = isSlingshotDragging;
+  }, [isSlingshotDragging]);
 
   const handleTouchEnd = () => {
-    if (!isSlingshotDragging || !hudState) return;
+    if (!isSlingshotDraggingRef.current || !hudState) return;
     setIsSlingshotDragging(false);
 
     const activeScene = gameRef.current?.scene.getScene('GameScene') as any;
@@ -223,6 +178,105 @@ export default function App() {
     }
   };
 
+  // --- Handlers for Slingshot drag tracking ---
+  const handleTouchStart = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!hudState || !hudState.isPlayerTurn || hudState.activeProjectileActive) return;
+    
+    let clientX = 0;
+    let clientY = 0;
+
+    if ('touches' in e) {
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else {
+      clientX = e.clientX;
+      clientY = e.clientY;
+      e.preventDefault(); // Prevent text selection/drag start in browser
+    }
+
+    if (touchZoneRef.current) {
+      const rect = touchZoneRef.current.getBoundingClientRect();
+      const relativeX = clientX - rect.left;
+      const relativeY = clientY - rect.top;
+
+      // Ensure click is occurring inside player launch zone sector (roughly left bottom, x < 360)
+      if (relativeX < 360) {
+        setIsSlingshotDragging(true);
+        dragStart.current = { x: relativeX, y: relativeY };
+
+        // Inform phaser scene
+        const activeScene = gameRef.current?.scene.getScene('GameScene') as any;
+        if (activeScene && typeof activeScene.updateAimingDetails === 'function') {
+          activeScene.updateAimingDetails(true, relativeX, relativeY);
+        }
+      }
+    }
+  };
+
+  // Global event listeners for tracking custom slingshot drag smoothly over the entire screen
+  useEffect(() => {
+    if (!isSlingshotDragging) return;
+
+    const handleGlobalMove = (e: MouseEvent) => {
+      const clientX = e.clientX;
+      const clientY = e.clientY;
+
+      if (touchZoneRef.current) {
+        const rect = touchZoneRef.current.getBoundingClientRect();
+        const relativeX = clientX - rect.left;
+        const relativeY = clientY - rect.top;
+
+        const activeScene = gameRef.current?.scene.getScene('GameScene') as any;
+        if (activeScene && typeof activeScene.updateAimingDetails === 'function') {
+          activeScene.updateAimingDetails(true, relativeX, relativeY);
+        }
+      }
+    };
+
+    const handleGlobalUp = () => {
+      handleTouchEnd();
+    };
+
+    window.addEventListener('mousemove', handleGlobalMove);
+    window.addEventListener('mouseup', handleGlobalUp);
+    return () => {
+      window.removeEventListener('mousemove', handleGlobalMove);
+      window.removeEventListener('mouseup', handleGlobalUp);
+    };
+  }, [isSlingshotDragging, hudState]);
+
+  useEffect(() => {
+    if (!isSlingshotDragging) return;
+
+    const handleGlobalTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 0) return;
+      const clientX = e.touches[0].clientX;
+      const clientY = e.touches[0].clientY;
+
+      if (touchZoneRef.current) {
+        const rect = touchZoneRef.current.getBoundingClientRect();
+        const relativeX = clientX - rect.left;
+        const relativeY = clientY - rect.top;
+
+        const activeScene = gameRef.current?.scene.getScene('GameScene') as any;
+        if (activeScene && typeof activeScene.updateAimingDetails === 'function') {
+          activeScene.updateAimingDetails(true, relativeX, relativeY);
+        }
+      }
+    };
+
+    const handleGlobalTouchEnd = () => {
+      handleTouchEnd();
+    };
+
+    window.addEventListener('touchmove', handleGlobalTouchMove, { passive: true });
+    window.addEventListener('touchend', handleGlobalTouchEnd);
+    return () => {
+      window.removeEventListener('touchmove', handleGlobalTouchMove);
+      window.removeEventListener('touchend', handleGlobalTouchEnd);
+    };
+  }, [isSlingshotDragging, hudState]);
+
   return (
     <div id="artillery-app-root" className="min-h-screen w-full bg-gradient-to-b from-[#4A90E2] via-[#5c9ce6] to-[#2C3E50] flex flex-col items-center justify-between font-sans antialiased select-none text-slate-900 pb-6">
       
@@ -236,7 +290,7 @@ export default function App() {
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.4)]">
               Fortress Fury
             </h1>
-            <p className="text-[10px] uppercase font-black text-yellow-300 drop-shadow-[0_1px_1px_rgba(0,0,0,0.4)] tracking-wider">Animal Warriors</p>
+            <p className="text-[10px] uppercase font-black text-yellow-300 drop-shadow-[0_1px_1px_rgba(0,0,0,0.4)] tracking-wider font-bold">Animal Warriors</p>
           </div>
         </div>
 
@@ -253,273 +307,292 @@ export default function App() {
       </header>
 
       {/* 2. Main Game Board & Dashboard Layout */}
-      <main className="w-full max-w-7xl px-4 flex-1 flex flex-col lg:flex-row items-center justify-center gap-4 py-4">
-        
-        {/* Playable Stage Wrapper with HTML/React Overlay panels */}
-        <div className="flex-1 flex flex-col items-center max-w-full">
+      <main className="w-full max-w-[1440px] px-4 flex-1 flex flex-col justify-center py-4">
+        <div className="flex flex-col md:flex-row gap-4 items-stretch w-full justify-center">
           
-          {/* Active Level Header - shows up only when in actual game scene */}
+          {/* Left Column: SQUAD Panel (15% width) - Only show when level state is loaded */}
           {hudState && (
-            <div className="w-full max-w-[1024px] flex flex-wrap items-center justify-between gap-4 mb-3 z-10">
-              {/* Stage Panel */}
-              <div className="bg-yellow-400 border-4 border-black px-4 py-1.5 rounded-2xl shadow-md flex flex-col justify-start">
-                <span className="text-[10px] uppercase font-bold text-slate-800/80 leading-none">STAGE {hudState.levelId}</span>
-                <span className="text-sm font-black text-slate-950 truncate max-w-[150px]">{hudState.levelName.split(':')[1] || hudState.levelName}</span>
+            <div className="w-full md:w-[15%] bg-white/95 border-4 border-black rounded-3xl p-2.5 flex flex-col justify-between shadow-[6px_6px_0px_#000] min-w-[180px] max-h-[640px] overflow-y-auto animate-fade-in">
+              <div>
+                <h3 className="text-[10px] font-black text-slate-800 uppercase tracking-wider mb-2 border-b-2 border-black/10 pb-1 flex items-center justify-between">
+                  <span>UNITS 🐾</span>
+                  <span className="text-[8px] bg-slate-800 text-white rounded-full px-1.5 py-0.5 font-mono">ACTIVE</span>
+                </h3>
+                <div className="flex flex-col gap-1.5 mb-1.5">
+                  {hudState.availableChars.map((char) => {
+                    const isActive = hudState.selectedCharId === char.id;
+                    const charEmoji = char.id === 'lumi' ? '🐱' : char.id === 'torbo' ? '🐗' : char.id === 'pico' ? '🐿️' : char.id === 'bumba' ? '🦎' : '🐈';
+                    return (
+                      <div
+                        key={char.id}
+                        onClick={() => handleSelectCharacter(char.id)}
+                        className={`p-1 rounded-lg flex items-center gap-1.5 cursor-pointer transition-all border-2 ${
+                          isActive
+                            ? 'bg-green-400 border-black ring-2 ring-yellow-400 ring-offset-1 shadow-sm scale-[1.01]'
+                            : 'bg-white border-slate-300 hover:bg-slate-50 hover:border-black/60 shadow-inner opacity-90'
+                        }`}
+                      >
+                        <div className="w-6 h-6 bg-white border border-black rounded-full flex items-center justify-center text-xs shadow-inner">
+                          {charEmoji}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[9px] font-black uppercase text-slate-900 flex items-center justify-between leading-none truncate font-mono">
+                            <span>{char.id}</span>
+                            {isActive && <span className="text-[7px] text-slate-900 bg-yellow-300 border border-black/50 rounded px-0.5 font-bold">SEL</span>}
+                          </div>
+                          <div className="h-1 bg-black/20 rounded-full overflow-hidden border border-black/60 mt-0.5">
+                            <div className="h-full bg-red-500 transition-all rounded-full" style={{ width: `${char.hp}%` }} />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
-              {/* Turn Budget Counter */}
-              <div className="bg-white border-4 border-black px-4 py-1.5 rounded-2xl shadow-md flex flex-col items-center">
-                <span className="text-[10px] uppercase font-bold text-slate-500 leading-none">TURN BUDGET</span>
-                <span className={`text-base font-black ${hudState.maxTurns - hudState.currentTurn <= 1 ? 'text-red-600 animate-pulse' : 'text-slate-950'}`}>
-                  {hudState.currentTurn} / {hudState.maxTurns}
-                </span>
+              <div className="bg-amber-100/90 border-2 border-black rounded-xl p-1.5 text-[9px] text-slate-800 leading-tight font-semibold">
+                <div className="font-black text-amber-900 text-[10px]">✏️ {hudState.availableChars.find(c => c.id === hudState.selectedCharId)?.name}</div>
+                <p className="leading-snug mt-0.5 font-mono">{hudState.availableChars.find(c => c.id === hudState.selectedCharId)?.desc}</p>
+                <div className="mt-1 text-slate-950 font-black text-[8px] bg-yellow-300/60 border border-black/20 rounded px-1 py-0.5 inline-block font-mono leading-none">
+                  ⚡ 특수: {hudState.availableChars.find(c => c.id === hudState.selectedCharId)?.specialAbility}
+                </div>
               </div>
 
-              {/* Real-time Wind vane visual */}
-              <div className="bg-sky-100 border-4 border-black px-4 py-1.5 rounded-2xl shadow-md flex flex-col items-center">
-                <span className="text-[10px] uppercase font-bold text-slate-500 leading-none">WIND VELOCITY</span>
-                {hudState.wind.direction === 'calm' ? (
-                  <span className="text-sm font-black text-slate-800">0.0 m/s CALM</span>
-                ) : (
-                  <div className="flex items-center gap-1 text-sm font-black text-slate-950">
-                    <span className={hudState.wind.direction === 'left' ? 'text-red-500' : 'text-emerald-600'}>
-                      {hudState.wind.direction === 'left' ? '◀ WEST' : '▶ EAST'}
-                    </span>
-                    <span>{(hudState.wind.displayValue * 3).toFixed(1)} m/s</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Status Banner element */}
-              <div className="bg-slate-950 border-4 border-black text-white px-4 py-1.5 rounded-2xl shadow-md flex flex-col items-center">
-                <span className="text-[10px] uppercase font-bold tracking-widest text-slate-400 leading-none font-mono">ENGINE STATE</span>
-                <span className={`text-xs font-black uppercase tracking-wider ${hudState.isPlayerTurn ? 'text-emerald-400 font-bold' : 'text-rose-500 font-bold'}`}>
-                  {hudState.isPlayerTurn ? '사격 대기 (READY)' : '적 폭격 중 (DEFEND)'}
-                </span>
+              {/* Character manual controller inside the sidebar rail */}
+              <div className="mt-2 p-1.5 bg-slate-900 rounded-xl border border-slate-800 flex flex-col gap-1">
+                <span className="text-[8px] font-black text-slate-300 uppercase tracking-wider text-center font-mono">전술 기동 (MOVE)</span>
+                <div className="flex gap-1">
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); handleMovePlayer('left'); }}
+                    className="flex-1 py-1 bg-slate-800 hover:bg-amber-400 hover:text-black font-black text-white text-[9px] rounded-md border border-slate-700 active:scale-95 transition-all text-center cursor-pointer font-bold"
+                  >
+                    ◀ LEFT [A]
+                  </button>
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); handleMovePlayer('right'); }}
+                    className="flex-1 py-1 bg-slate-800 hover:bg-amber-400 hover:text-black font-black text-white text-[9px] rounded-md border border-slate-700 active:scale-95 transition-all text-center cursor-pointer font-bold"
+                  >
+                    RIGHT ▶ [D]
+                  </button>
+                </div>
               </div>
             </div>
           )}
 
-          {/* Phaser Canvas container */}
-          <div className="w-full max-w-[1024px] aspect-[1024/600] rounded-[24px] border-4 border-black bg-slate-950 shadow-[8px_8px_0px_#000000] overflow-hidden relative">
-            <div id="phaser-game-container" className="w-full h-full" ref={gameParentRef}></div>
+          {/* Center Column: Game Screen Canvas Container (70% or 100% width) */}
+          <div className={`w-full ${hudState ? 'md:w-[70%]' : 'max-w-[1024px]'} flex flex-col items-center transition-all duration-300`}>
+            {/* Active Level Header Row */}
+            {hudState && (
+              <div className="w-full flex flex-wrap items-center justify-between gap-1.5 mb-2 z-10 bg-slate-900/80 p-2 rounded-2xl border-2 border-black/20 animate-fade-in">
+                {/* Stage Panel */}
+                <div className="bg-yellow-400 border border-black px-2 py-0.5 rounded-xl shadow-sm flex flex-col justify-start">
+                  <span className="text-[8px] uppercase font-bold text-slate-800 leading-none">STAGE {hudState.levelId}</span>
+                  <span className="text-xs font-black text-slate-950 truncate max-w-[120px] leading-tight mt-0.5">
+                    {hudState.levelName.split(':')[1] || hudState.levelName}
+                  </span>
+                </div>
 
-            {/* Drag capturing layer mapped specifically to left launch zone (used overlay for smooth React drag inputs) */}
-            {hudState && hudState.isPlayerTurn && !hudState.activeProjectileActive && (
-              <div 
-                ref={touchZoneRef}
-                className="absolute inset-0 z-10 cursor-crosshair sm:pointer-events-auto"
-                onMouseDown={handleTouchStart}
-                onMouseMove={handleTouchMove}
-                onMouseUp={handleTouchEnd}
-                onMouseLeave={handleTouchEnd}
-                onTouchStart={handleTouchStart}
-                onTouchMove={handleTouchMove}
-                onTouchEnd={handleTouchEnd}
-              >
-                {/* Visual guideline hint to prompt user */}
-                <div className="absolute left-6 top-6 bg-slate-900/90 border border-slate-800 rounded-lg p-2 max-w-[240px] text-[11px] pointer-events-none font-medium leading-relaxed shadow-lg">
-                  <div className="text-amber-400 font-bold mb-1">🎮 조작 방식 안내</div>
-                  <div>1. 캐릭터 주위를 뒤로 당기면 새총 충전선이 늘어납니다.</div>
-                  <div>2. 하단 게이지로 각도 조절 후 <strong className="text-rose-400">포격 발사</strong>를 이용하셔도 좋습니다!</div>
+                {/* Player HP Display */}
+                <div className="bg-rose-50 border border-black px-2 py-0.5 rounded-xl shadow-sm flex items-center gap-1.5">
+                  <span className="text-xs">❤️</span>
+                  <div className="flex flex-col">
+                    <span className="text-[8px] uppercase font-bold text-rose-800 leading-none font-mono">PLAYER HP</span>
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <div className="w-16 h-2 bg-black/20 rounded-full overflow-hidden border border-black/40">
+                        <div 
+                          className={`h-full transition-all duration-300 rounded-full ${hudState.playerHp > 50 ? 'bg-green-500' : hudState.playerHp > 25 ? 'bg-yellow-500' : 'bg-red-500 animate-pulse'}`} 
+                          style={{ width: `${Math.max(0, Math.min(100, hudState.playerHp))}%` }}
+                        />
+                      </div>
+                      <span className="text-[9px] font-black text-rose-950 leading-none font-mono">{hudState.playerHp}%</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Turn Budget Counter */}
+                <div className="bg-white border border-black px-2.5 py-0.5 rounded-xl shadow-sm flex flex-col items-center justify-center">
+                  <span className="text-[8px] uppercase font-bold text-slate-500 leading-none font-mono">TURN</span>
+                  <span className={`text-xs font-black mt-0.5 font-mono ${hudState.maxTurns - hudState.currentTurn <= 1 ? 'text-red-600 animate-pulse' : 'text-slate-950'}`}>
+                    {hudState.currentTurn} / {hudState.maxTurns}
+                  </span>
+                </div>
+
+                {/* Real-time Wind vane visual */}
+                <div className="bg-sky-100 border border-black px-2.5 py-0.5 rounded-xl shadow-sm flex flex-col items-center justify-center">
+                  <span className="text-[8px] uppercase font-bold text-slate-500 leading-none font-mono">WIND</span>
+                  {hudState.wind.direction === 'calm' ? (
+                    <span className="text-[10px] font-black text-slate-800 mt-0.5 font-mono">CALM</span>
+                  ) : (
+                    <div className="flex items-center gap-1 text-[10px] font-black text-slate-950 mt-0.5 font-mono font-bold">
+                      <span className={hudState.wind.direction === 'left' ? 'text-red-500' : 'text-emerald-600'}>
+                        {hudState.wind.direction === 'left' ? '◀' : '▶'}
+                      </span>
+                      <span>{(hudState.wind.displayValue * 3).toFixed(1)}m/s</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Engine state status */}
+                <div className="bg-slate-950 border border-black text-white px-2.5 py-0.5 rounded-xl shadow-sm flex flex-col items-center justify-center">
+                  <span className="text-[8px] uppercase font-zinc-400 leading-none font-mono">STATE</span>
+                  <span className={`text-[9px] font-black uppercase ${hudState.isPlayerTurn ? 'text-emerald-400' : 'text-rose-500 animate-pulse'}`}>
+                    {hudState.isPlayerTurn ? 'READY' : 'FIRE'}
+                  </span>
                 </div>
               </div>
             )}
-            
-            {/* Overlay if not active state */}
-            {!hudState && (
-              <div className="absolute inset-0 bg-slate-950/20 pointer-events-none"></div>
+
+            {/* Game Viewport Stage Canvas - STABLE NODE */}
+            <div className="w-full aspect-[1024/600] rounded-[24px] border-4 border-black bg-slate-950 shadow-[8px_8px_0px_#000000] overflow-hidden relative">
+              <div id="phaser-game-container" className="w-full h-full" ref={gameParentRef}></div>
+              
+              {/* Drag Overlay with window listeners capturing pointer events */}
+              {hudState && hudState.isPlayerTurn && !hudState.activeProjectileActive && (
+                <div 
+                  ref={touchZoneRef}
+                  className="absolute inset-0 z-10 cursor-crosshair sm:pointer-events-auto animate-fade-in"
+                  onMouseDown={handleTouchStart}
+                  onTouchStart={handleTouchStart}
+                >
+                  {/* Visual guide overlay */}
+                  <div className="absolute left-4 top-4 bg-slate-900/90 border border-slate-800 rounded-lg p-1.5 max-w-[210px] text-[10px] pointer-events-none font-medium leading-relaxed text-white shadow-lg">
+                    <div className="text-amber-400 font-bold mb-0.5">🎮 드래그 사격 조작법</div>
+                    <div>캐릭터 근처를 터치해 뒤로 당겼다가 놓으면 궤적선 방향으로 포탄을 발사합니다.</div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Game Ticker Scores Display beneath Canvas */}
+            {hudState && (
+              <div className="w-full flex items-center justify-between mt-3 text-xs font-black py-2 gap-2 animate-fade-in">
+                <div className="flex items-center gap-1.5 bg-yellow-400 border px-3 py-1 rounded-xl shadow-sm border-black text-slate-950 font-mono font-bold">
+                  <span>SCORE:</span>
+                  <span className="font-extrabold text-xs">{hudState.score.toLocaleString()}</span>
+                </div>
+                <div className="flex items-center gap-1.5 bg-red-500 border px-3 py-1 rounded-xl shadow-sm border-black text-white font-mono font-bold">
+                  <span>ENEMIES:</span>
+                  <span className="font-extrabold text-xs">{hudState.enemiesLeft} / {hudState.enemiesTotal}</span>
+                </div>
+                <button
+                  onClick={handleExitToSelect}
+                  className="px-4 py-1 rounded-xl border border-black text-[11px] font-black text-slate-800 hover:text-black bg-white hover:bg-slate-100 transition-all text-center shadow-sm cursor-pointer font-bold"
+                >
+                  🚪 RETREAT (퇴 각)
+                </button>
+              </div>
             )}
           </div>
 
-          {/* 3. Bottom Panels: Controls, Angle, Power & Fire */}
+          {/* Right Column: WEAPONS chooser and Cannon stats controls (15% width) - Only show when level state is loaded */}
           {hudState && (
-            <div className="w-full max-w-[1024px] mt-6 grid grid-cols-1 md:grid-cols-12 gap-5">
-              
-              {/* Characters Selection and Info */}
-              <div className="md:col-span-4 bg-white/95 border-4 border-black rounded-3xl p-4 flex flex-col justify-between shadow-[6px_6px_0px_#000]">
-                <div>
-                  <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-3 border-b-2 border-black/10 pb-1 flex items-center justify-between">
-                    <span>UNIT SQUAD 🐾</span>
-                    <span className="text-[10px] bg-slate-800 text-white rounded-full px-2 py-0.5">ACTIVE</span>
-                  </h3>
-                  <div className="flex flex-col gap-2.5 mb-3">
-                    {hudState.availableChars.map((char) => {
-                      const isActive = hudState.selectedCharId === char.id;
-                      const charEmoji = char.id === 'lumi' ? '🐱' : char.id === 'torbo' ? '🐗' : char.id === 'pico' ? '🐿️' : char.id === 'bumba' ? '🦎' : '🐈';
-                      return (
-                        <div
-                          key={char.id}
-                          onClick={() => handleSelectCharacter(char.id)}
-                          className={`p-2 rounded-2xl flex items-center gap-3 cursor-pointer transition-all border-4 ${
-                            isActive
-                              ? 'bg-green-400 border-black ring-4 ring-yellow-400 ring-offset-2 shadow-md scale-[1.02]'
-                              : 'bg-white border-slate-300 hover:bg-slate-100 hover:border-black/60 shadow-sm opacity-80'
-                          }`}
-                        >
-                          <div className="w-11 h-11 bg-white border-2 border-black rounded-full flex items-center justify-center text-xl shadow-inner">
-                            {charEmoji}
-                          </div>
-                          <div className="flex-1">
-                            <div className="text-xs font-black uppercase text-slate-900 flex items-center justify-between">
-                              <span>{char.id}</span>
-                              {isActive && <span className="text-[9px] text-slate-900 bg-yellow-300 border border-black rounded px-1 font-bold">SELECTED</span>}
-                            </div>
-                            <div className="h-2.5 bg-black/20 rounded-full overflow-hidden border border-black mt-1">
-                              <div className="h-full bg-red-500 transition-all rounded-full" style={{ width: `${char.hp}%` }} />
-                            </div>
-                          </div>
+            <div className="w-full md:w-[15%] bg-white/95 border-4 border-black rounded-3xl p-2.5 flex flex-col justify-between shadow-[6px_6px_0px_#000] min-w-[180px] max-h-[640px] overflow-y-auto animate-fade-in">
+              <div>
+                <h3 className="text-[10px] font-black text-slate-800 uppercase tracking-wider mb-2 border-b-2 border-black/10 pb-1 font-sans">
+                  WEAPONS 💣
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-1 gap-1.5 mb-1.5">
+                  {hudState.availableWeapons.map((w) => {
+                    const isActive = hudState.selectedWeaponId === w.id;
+                    const hasAmmo = (hudState.ammoRemaining[w.id] ?? 99) > 0;
+                    
+                    let bgClass = 'bg-slate-100';
+                    let emojiSpec = '💣';
+                    if (w.id === 'standard') { bgClass = 'bg-orange-400'; emojiSpec = '💣'; }
+                    else if (w.id === 'split_shot') { bgClass = 'bg-blue-300'; emojiSpec = '☄️'; }
+                    else if (w.id === 'heavy_shell') { bgClass = 'bg-pink-400'; emojiSpec = '🔮'; }
+                    else if (w.id === 'napalm_strike') { bgClass = 'bg-red-400'; emojiSpec = '🔥'; }
+                    else if (w.id === 'bouncy_ball') { bgClass = 'bg-lime-400'; emojiSpec = '🏐'; }
+                    else if (w.id === 'pierce_bullet') { bgClass = 'bg-cyan-400'; emojiSpec = '🚀'; }
+                    else if (w.id === 'gravity_bomb') { bgClass = 'bg-violet-400'; emojiSpec = '🌀'; }
+                    else if (w.id === 'inferno') { bgClass = 'bg-emerald-400'; emojiSpec = '☄️'; }
+
+                    return (
+                      <button
+                        key={w.id}
+                        id={`weapon-btn-${w.id}`}
+                        disabled={!hasAmmo}
+                        onClick={() => handleSelectWeapon(w.id)}
+                        className={`p-1 rounded-lg border-2 flex items-center gap-1 transition-all text-left relative cursor-pointer ${
+                          isActive
+                            ? `${bgClass} border-black ring-2 ring-yellow-400 font-black scale-[1.01] shadow-inner`
+                            : 'bg-white border-black/40 hover:bg-slate-50 hover:border-black shadow-sm'
+                        } ${!hasAmmo ? 'opacity-30 cursor-not-allowed border-black/20' : ''}`}
+                      >
+                        <span className="text-sm">{emojiSpec}</span>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-[9px] font-black uppercase text-slate-900 block truncate leading-none">
+                            {w.name.split(' ')[0]}
+                          </span>
+                          <span className="text-[7px] font-mono leading-none text-slate-800 bg-black/10 px-1 rounded mt-0.5 inline-block font-bold">
+                            {hudState.ammoRemaining[w.id] === undefined ? '무한' : `남음: ${hudState.ammoRemaining[w.id]}`}
+                          </span>
                         </div>
-                      );
-                    })}
-                  </div>
+                      </button>
+                    );
+                  })}
                 </div>
 
-                <div className="bg-amber-100/90 border-2 border-black rounded-xl p-2.5 text-xs text-slate-800 leading-relaxed font-semibold">
-                  <div className="font-black text-amber-900">✏️ {hudState.availableChars.find(c => c.id === hudState.selectedCharId)?.name}</div>
-                  <p className="text-[11px] leading-tight mt-0.5">{hudState.availableChars.find(c => c.id === hudState.selectedCharId)?.desc}</p>
-                  <div className="mt-1.5 text-slate-950 font-black text-[11px] bg-yellow-300/60 border border-black/20 rounded px-1.5 py-0.5 inline-block">
-                    ⚡ 특수능력: {hudState.availableChars.find(c => c.id === hudState.selectedCharId)?.specialAbility}
-                  </div>
+                <div className="bg-sky-50 border border-sky-200 rounded-xl p-1.5 text-[9px] text-slate-800 font-medium leading-tight">
+                  <span className="font-black text-sky-950 text-[10px]">🔮 {hudState.availableWeapons.find(w => w.id === hudState.selectedWeaponId)?.name}: </span>
+                  <p className="mt-0.5 leading-snug font-mono">{hudState.availableWeapons.find(w => w.id === hudState.selectedWeaponId)?.desc}</p>
                 </div>
               </div>
 
-              {/* Weapons chooser */}
-              <div className="md:col-span-5 bg-white/95 border-4 border-black rounded-3xl p-4 flex flex-col justify-between shadow-[6px_6px_0px_#000]">
-                <div>
-                  <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-3 border-b-2 border-black/10 pb-1">
-                    ARSENAL ARMORY 💣
-                  </h3>
-                  <div className="grid grid-cols-2 gap-2.5">
-                    {hudState.availableWeapons.map((w) => {
-                      const isActive = hudState.selectedWeaponId === w.id;
-                      const hasAmmo = (hudState.ammoRemaining[w.id] ?? 99) > 0;
-                      
-                      // Assign color scheme based on weapon type
-                      let bgClass = 'bg-slate-100';
-                      let emojiSpec = '💣';
-                      if (w.id === 'standard') { bgClass = 'bg-orange-400'; emojiSpec = '💣'; }
-                      else if (w.id === 'split_shot') { bgClass = 'bg-blue-300'; emojiSpec = '☄️'; }
-                      else if (w.id === 'heavy_shell') { bgClass = 'bg-pink-400'; emojiSpec = '🔮'; }
-                      else if (w.id === 'napalm_strike') { bgClass = 'bg-red-400'; emojiSpec = '🔥'; }
-                      else if (w.id === 'bouncy_ball') { bgClass = 'bg-lime-400'; emojiSpec = '🏐'; }
-                      else if (w.id === 'pierce_bullet') { bgClass = 'bg-cyan-400'; emojiSpec = '🚀'; }
-                      else if (w.id === 'gravity_bomb') { bgClass = 'bg-violet-400'; emojiSpec = '🌀'; }
-                      else if (w.id === 'inferno') { bgClass = 'bg-emerald-400'; emojiSpec = '☄️'; }
-
-                      return (
-                        <button
-                          key={w.id}
-                          id={`weapon-btn-${w.id}`}
-                          disabled={!hasAmmo}
-                          onClick={() => handleSelectWeapon(w.id)}
-                          className={`p-2 rounded-2xl border-4 flex items-center gap-2.5 transition-all text-left relative ${
-                            isActive
-                              ? `${bgClass} border-black ring-4 ring-yellow-400 ring-offset-1 font-black scale-105 shadow-md`
-                              : 'bg-white border-black/40 hover:bg-slate-100 hover:border-black shadow-sm'
-                          } ${!hasAmmo ? 'opacity-30 cursor-not-allowed border-black/20' : ''}`}
-                        >
-                          <span className="text-2xl">{emojiSpec}</span>
-                          <div className="flex-1 min-w-0">
-                            <span className="text-[11px] font-black uppercase text-slate-900 block truncate leading-tight">
-                              {w.name.split(' ')[0]}
-                            </span>
-                            <span className="text-[10px] font-mono leading-none text-slate-800 bg-black/10 px-1.5 py-0.5 rounded-full inline-block mt-0.5 font-bold">
-                              {hudState.ammoRemaining[w.id] === undefined ? '무한' : `남음: ${hudState.ammoRemaining[w.id]}`}
-                            </span>
-                          </div>
-                        </button>
-                      );
-                    })}
+              {/* Cannon Controls and Live Fire Button */}
+              <div className="bg-yellow-400 border-2 border-black rounded-xl p-2 text-slate-950 mt-2 font-semibold">
+                <h4 className="text-[9px] font-black text-slate-900 uppercase tracking-wider mb-1.5 border-b border-black/20 pb-0.5 font-mono">
+                  CANNON 🎯
+                </h4>
+                
+                {/* Angle slider */}
+                <div className="mb-1.5">
+                  <div className="flex items-center justify-between text-[9px] font-black mb-0.5 text-slate-900">
+                    <span>각도 (DEG)</span>
+                    <span className="text-red-700 font-extrabold text-[9px] bg-white border border-black px-1 rounded font-mono leading-none">{cannonAngle}°</span>
                   </div>
+                  <input 
+                    type="range"
+                    min="10"
+                    max="170"
+                    value={cannonAngle}
+                    onChange={(e) => setCannonAngle(Number(e.target.value))}
+                    className="w-full accent-black cursor-pointer h-1 bg-white rounded-full appearance-none border border-black"
+                  />
                 </div>
 
-                <div className="bg-sky-50/80 border-2 border-black rounded-xl p-2.5 text-xs text-slate-800 mt-3 font-medium">
-                  <span className="font-black text-sky-950">🔮 {hudState.availableWeapons.find(w => w.id === hudState.selectedWeaponId)?.name}: </span>
-                  <span className="text-[11px] leading-tight block mt-0.5">{hudState.availableWeapons.find(w => w.id === hudState.selectedWeaponId)?.desc}</span>
+                {/* Power slider */}
+                <div className="mb-2">
+                  <div className="flex items-center justify-between text-[9px] font-black mb-0.5 text-slate-900">
+                    <span>파워 (PWR)</span>
+                    <span className="text-amber-900 font-extrabold text-[9px] bg-white border border-black px-1 rounded font-mono leading-none">{cannonPower}%</span>
+                  </div>
+                  <input 
+                    type="range"
+                    min="15"
+                    max="100"
+                    value={cannonPower}
+                    onChange={(e) => setCannonPower(Number(e.target.value))}
+                    className="w-full accent-black cursor-pointer h-1 bg-white rounded-full appearance-none border border-black"
+                  />
                 </div>
+
+                {/* Live fire button */}
+                <button
+                  id="fire-cannon-btn"
+                  disabled={!hudState.isPlayerTurn || hudState.activeProjectileActive}
+                  onClick={handleFireCannon}
+                  className="w-full h-9 bg-red-600 hover:bg-red-700 text-white font-black rounded-lg border-2 border-black border-b-4 flex items-center justify-center select-none cursor-pointer active:scale-95 transition-all shadow-sm font-bold"
+                >
+                  <span className="text-[9px] font-black italic tracking-wide uppercase leading-none font-bold">
+                    {!hudState.isPlayerTurn ? 'WAIT...' : hudState.activeProjectileActive ? 'FIRE...' : 'FIRE!'}
+                  </span>
+                </button>
               </div>
-
-              {/* Cannon specs controls & Launch button */}
-              <div className="md:col-span-3 bg-yellow-400 border-4 border-black rounded-3xl p-4 flex flex-col justify-between shadow-[6px_6px_0px_#000] text-slate-950">
-                <div>
-                  <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-3 border-b-2 border-black/20 pb-1">
-                    CANNON CONTROL 🎯
-                  </h3>
-                  
-                  {/* Angle slider */}
-                  <div className="mb-3">
-                    <div className="flex items-center justify-between text-xs font-black mb-1 text-slate-900">
-                      <span>각도 (ANGLE)</span>
-                      <span className="text-red-600 font-extrabold text-sm bg-white border-2 border-black px-1.5 rounded">{cannonAngle}°</span>
-                    </div>
-                    <div className="relative flex items-center">
-                      <input 
-                        type="range"
-                        min="10"
-                        max="170"
-                        value={cannonAngle}
-                        onChange={(e) => setCannonAngle(Number(e.target.value))}
-                        className="w-full accent-black cursor-pointer h-2 bg-white rounded-full appearance-none border-2 border-black"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Power slider */}
-                  <div className="mb-4">
-                    <div className="flex items-center justify-between text-xs font-black mb-1 text-slate-900">
-                      <span>파워 (POWER)</span>
-                      <span className="text-amber-800 font-extrabold text-sm bg-white border-2 border-black px-1.5 rounded">{cannonPower}%</span>
-                    </div>
-                    <div className="relative flex items-center">
-                      <input 
-                        type="range"
-                        min="15"
-                        max="100"
-                        value={cannonPower}
-                        onChange={(e) => setCannonPower(Number(e.target.value))}
-                        className="w-full accent-black cursor-pointer h-2 bg-white rounded-full appearance-none border-2 border-black"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-2.5">
-                  <button
-                    id="fire-cannon-btn"
-                    disabled={!hudState.isPlayerTurn || hudState.activeProjectileActive}
-                    onClick={handleFireCannon}
-                    className="w-full h-16 bg-red-600 border-4 border-black rounded-2xl btn-vibrant border-b-8 shadow-md flex flex-col items-center justify-center active:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    <span className="text-white text-xl font-black italic tracking-tight leading-none text-center">
-                      {!hudState.isPlayerTurn 
-                        ? 'WAITING' 
-                        : hudState.activeProjectileActive 
-                          ? 'LOADING' 
-                          : 'FIRE!'}
-                    </span>
-                    <span className="text-white/80 text-[9px] font-black uppercase tracking-wider mt-0.5 text-center">
-                      {!hudState.isPlayerTurn ? '적 턴 차례' : '발 사'}
-                    </span>
-                  </button>
-
-                  <button
-                    id="exit-level-btn"
-                    onClick={handleExitToSelect}
-                    className="w-full py-1.5 rounded-xl border-2 border-black text-xs font-black text-slate-800 hover:text-black bg-white hover:bg-slate-100 transition-all text-center shadow-sm"
-                    title="전투 포기하고 나가기"
-                  >
-                    🚪 RETREAT (퇴 각)
-                  </button>
-                </div>
-
-              </div>
-
             </div>
           )}
 
         </div>
-
       </main>
 
       {/* 4. Play Ticker */}
