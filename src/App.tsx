@@ -3,6 +3,7 @@ import { createGame } from './game/GameRoot';
 import { Game } from 'phaser';
 import { Settings, Volume2, VolumeX, HelpCircle, X, ChevronLeft, ChevronRight, Info, Maximize } from 'lucide-react';
 import { SaveSystem } from './game/systems/SaveSystem';
+import { LEVELS } from './game/data/levels';
 
 // Interface matching Phaser GameScene.notifyHUD payload
 interface HudData {
@@ -67,6 +68,8 @@ export default function App() {
   // Settings & Rules Modal overlay states
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [soundOn, setSoundOn] = useState<boolean>(true);
+  const [activeSceneKey, setActiveSceneKey] = useState<string>('BootScene');
+  const [saveVersion, setSaveVersion] = useState<number>(0);
 
   // Load sound state on mount
   useEffect(() => {
@@ -95,6 +98,10 @@ export default function App() {
 
       gameInstance.events.on('scene_change', (sceneKey: string) => {
         setIsSettingsOpen(false);
+        setActiveSceneKey(sceneKey);
+        if (sceneKey === 'MenuScene' || sceneKey === 'LevelSelectScene') {
+          setHudState(null);
+        }
       });
 
       gameInstance.events.on('open_help', () => {
@@ -329,6 +336,51 @@ export default function App() {
     };
   }, [isSlingshotDragging, hudState]);
 
+  const lockLandscape = () => {
+    try {
+      const screenAny = window.screen as any;
+      if (screenAny && screenAny.orientation && screenAny.orientation.lock) {
+        screenAny.orientation.lock("landscape").catch(() => {});
+      } else if (screenAny.lockOrientation) {
+        screenAny.lockOrientation("landscape");
+      }
+    } catch (e) {}
+  };
+
+  const playBeep = (freq: number, duration: number) => {
+    if (!soundOn) return;
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.08, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + duration);
+    } catch (e) {
+      // quiet
+    }
+  };
+
+  const handleLaunchLevel = (levelId: number) => {
+    lockLandscape();
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    }
+
+    playBeep(520, 0.08);
+
+    if (gameRef.current) {
+      gameRef.current.scene.stop("MenuScene");
+      gameRef.current.scene.stop("LevelSelectScene");
+      gameRef.current.scene.start("GameScene", { levelId });
+    }
+  };
+
   const handleToggleSound = () => {
     const nextVal = !soundOn;
     SaveSystem.setSoundOn(nextVal);
@@ -362,18 +414,6 @@ export default function App() {
       setIsFullscreen(!!document.fullscreenElement);
     };
     document.addEventListener('fullscreenchange', handleFullscreenChange);
-
-    // Try to programmatically lock screen to landscape if supported
-    const lockLandscape = () => {
-      try {
-        const screenAny = window.screen as any;
-        if (screenAny && screenAny.orientation && screenAny.orientation.lock) {
-          screenAny.orientation.lock("landscape").catch(() => {});
-        } else if (screenAny.lockOrientation) {
-          screenAny.lockOrientation("landscape");
-        }
-      } catch (e) {}
-    };
 
     lockLandscape();
 
@@ -455,6 +495,135 @@ export default function App() {
         <div className="w-full aspect-[1024/600] max-h-[min(92vh,600px)] rounded-[24px] border-4 border-slate-950 bg-slate-950 shadow-[0_10px_30px_rgba(0,0,0,0.8)] overflow-hidden relative select-none">
           {/* Phaser HTML Element */}
           <div id="phaser-game-container" className="w-full h-full" ref={gameParentRef}></div>
+          
+          {/* 🏰 Elegant React Main Menu & Level Grid Overlay */}
+          {!hudState && (() => {
+            const currentSave = SaveSystem.load();
+            return (
+              <div className="absolute inset-0 z-20 flex flex-col items-center justify-between bg-slate-950/80 backdrop-blur-sm p-3 text-center select-none animate-fade-in">
+                
+                {/* Lobby Header */}
+                <div className="w-full flex justify-between items-center px-4 pt-1 pb-2 border-b border-white/5 shrink-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">🏰</span>
+                    <div className="text-left">
+                      <h2 className="text-base font-black tracking-tight text-white leading-tight">
+                        Fortress Fury
+                      </h2>
+                      <p className="text-[8px] uppercase tracking-wider text-yellow-400 font-mono font-bold">Animal Warriors</p>
+                    </div>
+                  </div>
+                  
+                  {/* Status Indicator */}
+                  <div className="flex items-center gap-3">
+                    <button 
+                      onClick={handleToggleSound}
+                      className="flex items-center gap-1.5 px-3 py-1 bg-white/5 border border-white/10 hover:bg-white/15 rounded-xl cursor-pointer active:scale-95 transition-all text-xs text-slate-200"
+                    >
+                      {soundOn ? <Volume2 className="w-3.5 h-3.5 text-emerald-400" /> : <VolumeX className="w-3.5 h-3.5 text-zinc-500" />}
+                      <span className="font-bold text-[10px] tracking-tight">{soundOn ? "소리 켬" : "소리 끔"}</span>
+                    </button>
+
+                    <button 
+                      onClick={toggleFullscreen}
+                      className="flex items-center gap-1.5 px-3 py-1 bg-white/5 border border-white/10 hover:bg-white/15 rounded-xl cursor-pointer active:scale-95 transition-all text-xs text-slate-200"
+                    >
+                      <Maximize className="w-3.5 h-3.5 text-sky-400" />
+                      <span className="font-bold text-[10px] tracking-tight">전체화면</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Grid Grid Section */}
+                <div className="w-full grow flex flex-col justify-center items-center overflow-y-auto px-1 py-1">
+                  <p className="text-[10px] text-slate-300 font-semibold mb-2 tracking-wide">
+                    ⚔️ 도전할 스테이지 레벨을 터치하여 요새 수호 전쟁을 시작하세요! (가로모드로 스마트폰을 회전하고 터치하시면 주소창이 가려집니다)
+                  </p>
+                  
+                  <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 w-full max-w-[880px] justify-center">
+                    {LEVELS.map((level) => {
+                      const record = currentSave.progress[level.id] || { levelId: level.id, unlocked: level.id === 1, highScore: 0, stars: 0 };
+                      const isUnlocked = level.id === 1 || record.unlocked;
+                      const starsAcquired = record.stars || 0;
+                      
+                      return (
+                        <div 
+                          key={level.id}
+                          onClick={() => {
+                            if (isUnlocked) {
+                              handleLaunchLevel(level.id);
+                            } else {
+                              playBeep(220, 0.12); // Locked feedback sound
+                            }
+                          }}
+                          className={`group relative aspect-[4/3] rounded-2xl border flex flex-col items-center justify-between p-2 cursor-pointer transition-all duration-300 transform active:scale-95 select-none ${
+                            isUnlocked 
+                              ? "bg-slate-900/95 border-sky-500/40 hover:border-sky-400 hover:bg-slate-800/95 hover:shadow-[0_4px_16px_rgba(14,165,233,0.2)]" 
+                              : "bg-slate-950/80 border-slate-900 filter grayscale opacity-40 cursor-not-allowed"
+                          }`}
+                        >
+                          {/* Locked Badge */}
+                          {!isUnlocked && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-slate-950/30 backdrop-blur-[0.5px] rounded-2xl z-10">
+                              <span className="text-xs bg-slate-900 border border-slate-800 p-1 rounded-full shadow-lg">🔒</span>
+                            </div>
+                          )}
+
+                          {/* Level ID number badge */}
+                          <div className={`text-[9px] font-black font-mono self-start rounded-md px-1 py-0.5 ${
+                            isUnlocked ? "bg-sky-500/10 text-sky-400 border border-sky-500/10" : "bg-zinc-800 text-zinc-500"
+                          }`}>
+                            STAGE {level.id < 10 ? `0${level.id}` : level.id}
+                          </div>
+
+                          {/* Theme visual helper title / nickname */}
+                          <div className="text-[10px] font-extrabold text-slate-100 group-hover:text-yellow-300 transition-colors leading-[1.1] text-center my-0.5 break-keep px-0.5">
+                            {level.name.split(':')[0] || "전투 훈련"}
+                          </div>
+
+                          {/* Stars Row representation */}
+                          {isUnlocked ? (
+                            <div className="flex gap-0.5 items-center justify-center self-stretch h-3">
+                              {[0, 1, 2].map((starIdx) => (
+                                <span 
+                                  key={starIdx} 
+                                  className={`text-[8px] filter drop-shadow-[0_1px_1px_rgba(0,0,0,0.5)] ${
+                                    starIdx < starsAcquired ? "text-yellow-400 animate-pulse font-bold" : "text-zinc-600"
+                                  }`}
+                                >
+                                  ★
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="text-[7.5px] text-zinc-600 font-bold">LOCKED</div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Footer and Data resetting utility */}
+                <div className="w-full flex justify-between items-center px-4 py-1.5 border-t border-white/5 shrink-0 text-[9px]">
+                  <span className="text-zinc-500 font-mono">APP V2.2.0 // AUTO ROTATOR SYSTEM ENGAGES</span>
+                  <button 
+                    onClick={() => {
+                      if (confirm("정말로 모든 게임 점수와 스테이지 도전을 초기화하시겠습니까?")) {
+                        SaveSystem.resetProgress();
+                        setSaveVersion(v => v + 1);
+                        window.location.reload();
+                      }
+                    }}
+                    className="text-red-400/80 hover:text-red-400 font-bold bg-red-500/5 hover:bg-red-500/10 border border-red-500/10 hover:border-red-500/30 active:scale-95 transition-all px-2.5 py-1 rounded-xl cursor-pointer"
+                  >
+                    데이터 전체 리셋 🔄
+                  </button>
+                </div>
+
+              </div>
+            );
+          })()}
           
           {/* Slingshot Drag Zone Layer */}
           {hudState && hudState.isPlayerTurn && !hudState.activeProjectileActive && (
