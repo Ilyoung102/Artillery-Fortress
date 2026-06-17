@@ -85,6 +85,21 @@ export default function App() {
       gameInstance.events.on('hud_update', (data: HudData) => {
         setHudState(data);
       });
+
+      gameInstance.events.on('scene_change', (sceneKey: string) => {
+        setIsSettingsOpen(false);
+      });
+
+      gameInstance.events.on('open_help', () => {
+        setIsSettingsOpen(true);
+      });
+
+      gameInstance.events.on('reset_progress', () => {
+        if (confirm("정말로 모든 게임 진행 레벨과 점수를 초기화하시겠습니까?")) {
+          SaveSystem.resetProgress();
+          window.location.reload();
+        }
+      });
     }
 
     return () => {

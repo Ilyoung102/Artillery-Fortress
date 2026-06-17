@@ -236,6 +236,9 @@ export class GameScene extends Scene {
   }
 
   create() {
+    // Force dismiss overlay modals upon game start
+    this.game.events.emit("scene_change", "GameScene");
+
     this.sceneStartTime = this.time.now;
     const width = this.cameras.main.width;
     const height = this.cameras.main.height;

@@ -8,6 +8,9 @@ export class LevelSelectScene extends Scene {
   }
 
   create() {
+    // Notify React to instantly lock and hide any lingering modal overlay dialogs
+    this.game.events.emit("scene_change", "LevelSelectScene");
+
     const width = this.cameras.main.width;
     const height = this.cameras.main.height;
     
