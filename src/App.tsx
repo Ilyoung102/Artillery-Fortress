@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createGame } from './game/GameRoot';
 import { Game } from 'phaser';
+import { Settings, Volume2, VolumeX, HelpCircle, X, ChevronLeft, ChevronRight, Info } from 'lucide-react';
+import { SaveSystem } from './game/systems/SaveSystem';
 
 // Interface matching Phaser GameScene.notifyHUD payload
 interface HudData {
@@ -62,9 +64,15 @@ export default function App() {
   const [isSlingshotDragging, setIsSlingshotDragging] = useState<boolean>(false);
   const dragStart = useRef({ x: 0, y: 0 });
 
-  // Sidebar collapse mechanics
-  const [isLeftCollapsed, setIsLeftCollapsed] = useState<boolean>(false);
-  const [isRightCollapsed, setIsRightCollapsed] = useState<boolean>(false);
+  // Settings & Rules Modal overlay states
+  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [soundOn, setSoundOn] = useState<boolean>(true);
+
+  // Load sound state on mount
+  useEffect(() => {
+    const data = SaveSystem.load();
+    setSoundOn(data.settings?.soundOn ?? true);
+  }, []);
 
   useEffect(() => {
     // Prevent double initialization in React safe mode
@@ -163,6 +171,23 @@ export default function App() {
     isSlingshotDraggingRef.current = isSlingshotDragging;
   }, [isSlingshotDragging]);
 
+  // Phaser의 실제 1024x600 좌표 축으로 이벤트 터치 좌표를 일치시키는 컴버터
+  const getPhaserCoords = (clientX: number, clientY: number) => {
+    if (!touchZoneRef.current) return { x: 0, y: 0 };
+    const rect = touchZoneRef.current.getBoundingClientRect();
+    const relativeX = clientX - rect.left;
+    const relativeY = clientY - rect.top;
+    
+    // 1024x600 해상도와의 비율 계산
+    const scaleX = 1024 / (rect.width || 1);
+    const scaleY = 600 / (rect.height || 1);
+    
+    return {
+      x: relativeX * scaleX,
+      y: relativeY * scaleY
+    };
+  };
+
   const handleTouchEnd = () => {
     if (!isSlingshotDraggingRef.current || !hudState) return;
     setIsSlingshotDragging(false);
@@ -198,21 +223,17 @@ export default function App() {
       e.preventDefault(); // Prevent text selection/drag start in browser
     }
 
-    if (touchZoneRef.current) {
-      const rect = touchZoneRef.current.getBoundingClientRect();
-      const relativeX = clientX - rect.left;
-      const relativeY = clientY - rect.top;
+    const coords = getPhaserCoords(clientX, clientY);
 
-      // Ensure click is occurring inside player launch zone sector (roughly left bottom, x < 360)
-      if (relativeX < 360) {
-        setIsSlingshotDragging(true);
-        dragStart.current = { x: relativeX, y: relativeY };
+    // Ensure click is occurring inside player launch zone sector (Phaser X < 380)
+    if (coords.x < 380) {
+      setIsSlingshotDragging(true);
+      dragStart.current = { x: coords.x, y: coords.y };
 
-        // Inform phaser scene
-        const activeScene = gameRef.current?.scene.getScene('GameScene') as any;
-        if (activeScene && typeof activeScene.updateAimingDetails === 'function') {
-          activeScene.updateAimingDetails(true, relativeX, relativeY);
-        }
+      // Inform phaser scene
+      const activeScene = gameRef.current?.scene.getScene('GameScene') as any;
+      if (activeScene && typeof activeScene.updateAimingDetails === 'function') {
+        activeScene.updateAimingDetails(true, coords.x, coords.y);
       }
     }
   };
@@ -225,15 +246,10 @@ export default function App() {
       const clientX = e.clientX;
       const clientY = e.clientY;
 
-      if (touchZoneRef.current) {
-        const rect = touchZoneRef.current.getBoundingClientRect();
-        const relativeX = clientX - rect.left;
-        const relativeY = clientY - rect.top;
-
-        const activeScene = gameRef.current?.scene.getScene('GameScene') as any;
-        if (activeScene && typeof activeScene.updateAimingDetails === 'function') {
-          activeScene.updateAimingDetails(true, relativeX, relativeY);
-        }
+      const coords = getPhaserCoords(clientX, clientY);
+      const activeScene = gameRef.current?.scene.getScene('GameScene') as any;
+      if (activeScene && typeof activeScene.updateAimingDetails === 'function') {
+        activeScene.updateAimingDetails(true, coords.x, coords.y);
       }
     };
 
@@ -257,15 +273,10 @@ export default function App() {
       const clientX = e.touches[0].clientX;
       const clientY = e.touches[0].clientY;
 
-      if (touchZoneRef.current) {
-        const rect = touchZoneRef.current.getBoundingClientRect();
-        const relativeX = clientX - rect.left;
-        const relativeY = clientY - rect.top;
-
-        const activeScene = gameRef.current?.scene.getScene('GameScene') as any;
-        if (activeScene && typeof activeScene.updateAimingDetails === 'function') {
-          activeScene.updateAimingDetails(true, relativeX, relativeY);
-        }
+      const coords = getPhaserCoords(clientX, clientY);
+      const activeScene = gameRef.current?.scene.getScene('GameScene') as any;
+      if (activeScene && typeof activeScene.updateAimingDetails === 'function') {
+        activeScene.updateAimingDetails(true, coords.x, coords.y);
       }
     };
 
@@ -281,340 +292,242 @@ export default function App() {
     };
   }, [isSlingshotDragging, hudState]);
 
+  const handleToggleSound = () => {
+    const nextVal = !soundOn;
+    SaveSystem.setSoundOn(nextVal);
+    setSoundOn(nextVal);
+
+    if (gameRef.current) {
+      const activeScene = gameRef.current.scene.getScene('GameScene') as any;
+      if (activeScene) {
+        if (typeof activeScene.stopAimCharge === 'function') activeScene.stopAimCharge();
+        if (typeof activeScene.stopFlySound === 'function') activeScene.stopFlySound();
+      }
+    }
+  };
+
   return (
-    <div id="artillery-app-root" className="min-h-screen w-full bg-gradient-to-b from-[#4A90E2] via-[#5c9ce6] to-[#2C3E50] flex flex-col items-center justify-between font-sans antialiased select-none text-slate-900 pb-3 sm:pb-6">
+    <div id="artillery-app-root" className="min-h-screen w-full bg-gradient-to-b from-[#111827] via-[#0f172a] to-[#020617] flex flex-col items-center justify-center font-sans antialiased select-none text-slate-100 p-2 sm:p-4 relative">
       
-      {/* 1. Header Banner */}
-      <header className="w-full max-w-7xl px-6 py-2.5 sm:py-4 flex items-center justify-between border-b-4 border-black/15 bg-white/20 backdrop-blur-md z-10 rounded-b-2xl shadow-xl mt-1 sm:mt-1.5">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-yellow-400 border-4 border-black px-1.5 py-1 rounded-2xl shadow-md font-bold text-slate-950 text-2xl flex items-center justify-center transform -rotate-6">
-            🏰
+      {/* Sleek Minimal Header - UI is completely focused inside the viewport element once you enter active stage */}
+      {!hudState && (
+        <header className="w-full max-w-[1024px] px-5 py-3.5 flex items-center justify-between border border-white/10 bg-slate-900/40 backdrop-blur-md z-10 rounded-2xl shadow-xl mb-4 animate-fade-in">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-yellow-400 border border-slate-950 rounded-xl shadow-md font-bold text-slate-950 text-lg flex items-center justify-center transform -rotate-3">
+              🏰
+            </div>
+            <div>
+              <h1 className="text-base sm:text-lg font-black tracking-tight text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.4)]">
+                Fortress Fury
+              </h1>
+              <p className="text-[8px] uppercase font-bold text-yellow-300 tracking-widest font-mono">Animal Warriors</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.4)]">
-              Fortress Fury
-            </h1>
-            <p className="text-[10px] uppercase font-black text-yellow-300 drop-shadow-[0_1px_1px_rgba(0,0,0,0.4)] tracking-wider font-bold">Animal Warriors</p>
+          <div className="flex items-center gap-2 text-[10px] font-mono font-bold text-emerald-400 bg-black/40 px-3 py-1 rounded-xl border border-white/5 uppercase">
+            ● Live Engine
           </div>
-        </div>
+        </header>
+      )}
 
-        {/* Global info or highscores link */}
-        <div className="flex items-center gap-4 text-xs font-black text-white">
-          <div className="hidden sm:block bg-slate-900 border-4 border-black px-4 py-1.5 rounded-2xl shadow-md uppercase">
-            <span className="text-slate-400 mr-2">Status:</span>
-            <span className="text-emerald-400">● LIVE ENGINE</span>
-          </div>
-          <div className="bg-sky-400 border-4 border-black text-slate-950 px-4 py-1.5 rounded-2xl shadow-md uppercase">
-            Phaser 3 + Matter.js
-          </div>
-        </div>
-      </header>
-
-      {/* 2. Main Game Board & Dashboard Layout */}
-      <main className="w-full max-w-[1440px] px-2 sm:px-4 flex-1 flex flex-col justify-center py-1 sm:py-2.5 overflow-hidden">
-        <div className="flex flex-row gap-2 sm:gap-3 md:gap-4 items-stretch w-full justify-center max-w-full">
+      {/* Main Game Block */}
+      <main className="w-full max-w-[1024px] flex flex-col items-center justify-center relative">
+        <div className="w-full aspect-[1024/600] rounded-[24px] border-4 border-slate-950 bg-slate-950 shadow-[0_20px_40px_rgba(0,0,0,0.8)] overflow-hidden relative select-none">
+          {/* Phaser HTML Element */}
+          <div id="phaser-game-container" className="w-full h-full" ref={gameParentRef}></div>
           
-          {/* Left Column: SQUAD Panel - Only show when level state is loaded */}
-          {hudState && (
-            isLeftCollapsed ? (
-              /* Collapsed Left Tab */
-              <div 
-                onClick={() => setIsLeftCollapsed(false)}
-                className="w-8 sm:w-10 bg-white/95 hover:bg-slate-50 border-4 border-black rounded-2xl flex flex-col items-center py-4 px-1 gap-4 shadow-[4px_4px_0px_#000] cursor-pointer transition-all shrink-0 select-none group"
-                title="SQUAD 부대 열기"
-              >
-                <button 
-                  className="w-5 h-5 sm:w-6 sm:h-6 rounded-md bg-yellow-400 border-2 border-black flex items-center justify-center font-black text-[9px] shadow-sm cursor-pointer group-hover:scale-110 transition-all font-bold text-slate-900"
-                >
-                  ▶
-                </button>
-                <div className="flex-1 flex flex-col justify-center items-center font-mono font-black text-slate-800 text-[9px] sm:text-[10px] tracking-widest gap-1 uppercase select-none">
-                  <span>S</span>
-                  <span>Q</span>
-                  <span>U</span>
-                  <span>A</span>
-                  <span>D</span>
-                  <span className="mt-2 text-xs">🐾</span>
+          {/* Slingshot Drag Zone Layer */}
+          {hudState && hudState.isPlayerTurn && !hudState.activeProjectileActive && (
+            <div 
+              ref={touchZoneRef}
+              className="absolute inset-0 z-10 cursor-crosshair sm:pointer-events-auto animate-fade-in"
+              onMouseDown={handleTouchStart}
+              onTouchStart={handleTouchStart}
+            >
+              {/* Floating micro instruction guide */}
+              <div className="absolute left-3 bottom-3 bg-slate-950/70 backdrop-blur-md border border-white/10 rounded-xl p-2 max-w-[190px] text-[8.5px] pointer-events-none font-medium leading-relaxed text-zinc-300 shadow-2xl">
+                <div className="text-amber-400 font-bold mb-0.5 flex items-center gap-1">
+                  <span>🎮</span> slingshot 조작
                 </div>
+                <div>아바타 주변을 스크롤/터치하여 뒤로 잡아당겼다가 손을 떼어 파워를 주입해 조준 포격합니다.</div>
               </div>
-            ) : (
-              /* Expanded Left Sidebar - EXACTLY 15% proportional width */
-              <div className="w-[15%] min-w-[125px] max-w-[210px] bg-white/95 border-4 border-black rounded-3xl p-2 sm:p-2.5 flex flex-col justify-between shadow-[6px_6px_0px_#000] shrink-0 max-h-[640px] overflow-y-auto animate-fade-in relative">
-                <div>
-                  <h3 className="text-[10px] font-black text-slate-800 uppercase tracking-wider mb-2 border-b-2 border-black/10 pb-1 flex items-center justify-between">
-                    <span>UNITS 🐾</span>
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); setIsLeftCollapsed(true); }}
-                      className="px-1 sm:px-1.5 py-0.5 rounded-lg bg-slate-100 hover:bg-rose-400 hover:text-white border-2 border-black text-[8px] sm:text-[9px] font-black tracking-tighter leading-none transition-all cursor-pointer font-bold"
-                      title="부대 접기"
-                    >
-                      ◀ HIDE
-                    </button>
-                  </h3>
-                  <div className="flex flex-col gap-1.5 mb-1.5">
-                    {hudState.availableChars.map((char) => {
-                      const isActive = hudState.selectedCharId === char.id;
-                      const charEmoji = char.id === 'lumi' ? '🐱' : char.id === 'torbo' ? '🐗' : char.id === 'pico' ? '🐿️' : char.id === 'bumba' ? '🦎' : '🐈';
-                      return (
-                        <div
-                          key={char.id}
-                          onClick={() => handleSelectCharacter(char.id)}
-                          className={`p-1 rounded-lg flex items-center gap-1.5 cursor-pointer transition-all border-2 ${
-                            isActive
-                              ? 'bg-green-400 border-black ring-2 ring-yellow-400 ring-offset-1 shadow-sm scale-[1.01]'
-                              : 'bg-white border-slate-300 hover:bg-slate-50 hover:border-black/60 shadow-inner opacity-90'
-                          }`}
-                        >
-                          <div className="w-5 h-5 sm:w-6 sm:h-6 bg-white border border-black rounded-full flex items-center justify-center text-[10px] sm:text-xs shadow-inner shrink-0">
-                            {charEmoji}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-[8px] sm:text-[9px] font-black uppercase text-slate-900 flex items-center justify-between leading-none truncate font-mono">
-                              <span>{char.id}</span>
-                              {isActive && <span className="text-[6px] text-slate-900 bg-yellow-300 border border-black/50 rounded px-0.5 font-bold">SEL</span>}
-                            </div>
-                            <div className="h-1 bg-black/20 rounded-full overflow-hidden border border-black/60 mt-0.5">
-                              <div className="h-full bg-red-500 transition-all rounded-full" style={{ width: `${char.hp}%` }} />
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="bg-amber-100/90 border-2 border-black rounded-xl p-1.5 text-[8px] sm:text-[9px] text-slate-800 leading-tight font-semibold">
-                  <div className="font-black text-amber-900 text-[9px] sm:text-[10px]">✏️ {hudState.availableChars.find(c => c.id === hudState.selectedCharId)?.name}</div>
-                  <p className="leading-snug mt-0.5 font-mono text-[7px] sm:text-[8px]">{hudState.availableChars.find(c => c.id === hudState.selectedCharId)?.desc}</p>
-                  <div className="mt-1 text-slate-950 font-black text-[7px] sm:text-[8px] bg-yellow-300/60 border border-black/20 rounded px-1 py-0.5 inline-block font-mono leading-none">
-                    ⚡ 특수: {hudState.availableChars.find(c => c.id === hudState.selectedCharId)?.specialAbility}
-                  </div>
-                </div>
-
-                {/* Character manual controller inside the sidebar rail */}
-                <div className="mt-2 p-1.5 bg-slate-900 rounded-xl border border-slate-800 flex flex-col gap-1">
-                  <span className="text-[7px] sm:text-[8px] font-black text-slate-300 uppercase tracking-wider text-center font-mono">전술 기동 (MOVE)</span>
-                  <div className="flex gap-1">
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); handleMovePlayer('left'); }}
-                      className="flex-1 py-1 bg-slate-800 hover:bg-amber-400 hover:text-black font-black text-white text-[8px] sm:text-[9px] rounded-md border border-slate-700 active:scale-95 transition-all text-center cursor-pointer font-bold flex items-center justify-center"
-                    >
-                      ◀&nbsp;<span className="hidden xl:inline">LEFT</span><span className="xl:hidden">L</span>&nbsp;[A]
-                    </button>
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); handleMovePlayer('right'); }}
-                      className="flex-1 py-1 bg-slate-800 hover:bg-amber-400 hover:text-black font-black text-white text-[8px] sm:text-[9px] rounded-md border border-slate-700 active:scale-95 transition-all text-center cursor-pointer font-bold flex items-center justify-center"
-                    >
-                      <span className="hidden xl:inline">RIGHT</span><span className="xl:hidden">R</span>&nbsp;▶&nbsp;[D]
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )
+            </div>
           )}
 
-          {/* Center Column: Game Screen Canvas Container (EXACTLY 70% ratio) */}
-          <div className="w-[70%] flex-1 min-w-0 max-w-[1024px] flex flex-col items-center transition-all duration-300">
-            {/* Active Level Header Row */}
-            {hudState && (
-              <div className="w-full flex flex-wrap items-center justify-between gap-1.5 mb-2 z-10 bg-slate-900/80 p-2 rounded-2xl border-2 border-black/20 animate-fade-in">
-                {/* Stage Panel */}
-                <div className="bg-yellow-400 border border-black px-2 py-0.5 rounded-xl shadow-sm flex flex-col justify-start">
-                  <span className="text-[8px] uppercase font-bold text-slate-800 leading-none">STAGE {hudState.levelId}</span>
-                  <span className="text-xs font-black text-slate-950 truncate max-w-[120px] leading-tight mt-0.5">
-                    {hudState.levelName.split(':')[1] || hudState.levelName}
-                  </span>
+          {/* HUD GLASS OVERLAYS - FLUID INTEGRATED INSIDE MAIN GAMEBOARD */}
+          {hudState && (
+            <>
+              {/* TOP FLOATING STATUS BAR (Stage info, wind direction, score, foes, HP, setup buttons) */}
+              {/* 1. TOP LEFT: STAGE, WIND, AND TURN BUDGET (Compact Floating Row) */}
+              <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 pointer-events-auto z-20 select-none">
+                <div className="bg-yellow-400 text-slate-950 px-1.5 py-0.5 rounded-lg font-black text-[8px] font-mono shadow-md">
+                  STAGE {hudState.levelId}
                 </div>
-
-                {/* Player HP Display */}
-                <div className="bg-rose-50 border border-black px-2 py-0.5 rounded-xl shadow-sm flex items-center gap-1.5">
-                  <span className="text-xs">❤️</span>
-                  <div className="flex flex-col">
-                    <span className="text-[8px] uppercase font-bold text-rose-800 leading-none font-mono">PLAYER HP</span>
-                    <div className="flex items-center gap-1 mt-0.5">
-                      <div className="w-16 h-2 bg-black/20 rounded-full overflow-hidden border border-black/40">
-                        <div 
-                          className={`h-full transition-all duration-300 rounded-full ${hudState.playerHp > 50 ? 'bg-green-500' : hudState.playerHp > 25 ? 'bg-yellow-500' : 'bg-red-500 animate-pulse'}`} 
-                          style={{ width: `${Math.max(0, Math.min(100, hudState.playerHp))}%` }}
-                        />
-                      </div>
-                      <span className="text-[9px] font-black text-rose-950 leading-none font-mono">{hudState.playerHp}%</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Turn Budget Counter */}
-                <div className="bg-white border border-black px-2.5 py-0.5 rounded-xl shadow-sm flex flex-col items-center justify-center">
-                  <span className="text-[8px] uppercase font-bold text-slate-500 leading-none font-mono">TURN</span>
-                  <span className={`text-xs font-black mt-0.5 font-mono ${hudState.maxTurns - hudState.currentTurn <= 1 ? 'text-red-600 animate-pulse' : 'text-slate-950'}`}>
-                    {hudState.currentTurn} / {hudState.maxTurns}
-                  </span>
-                </div>
-
-                {/* Real-time Wind vane visual */}
-                <div className="bg-sky-100 border border-black px-2.5 py-0.5 rounded-xl shadow-sm flex flex-col items-center justify-center">
-                  <span className="text-[8px] uppercase font-bold text-slate-500 leading-none font-mono">WIND</span>
+                
+                {/* Wind indicator */}
+                <div className="flex items-center gap-1 text-[8px] text-zinc-300 font-mono bg-black/50 border border-white/10 px-2 py-0.5 rounded-lg shadow-md">
+                  <span className="text-sky-300">WIND</span>
                   {hudState.wind.direction === 'calm' ? (
-                    <span className="text-[10px] font-black text-slate-800 mt-0.5 font-mono">CALM</span>
+                    <span className="text-zinc-400 font-bold">CALM</span>
                   ) : (
-                    <div className="flex items-center gap-1 text-[10px] font-black text-slate-950 mt-0.5 font-mono font-bold">
-                      <span className={hudState.wind.direction === 'left' ? 'text-red-500' : 'text-emerald-600'}>
+                    <span className="flex items-center gap-0.5 text-sky-200 font-bold">
+                      <span className={hudState.wind.direction === 'left' ? 'text-rose-400 font-bold' : 'text-emerald-400 font-bold'}>
                         {hudState.wind.direction === 'left' ? '◀' : '▶'}
                       </span>
                       <span>{(hudState.wind.displayValue * 3).toFixed(1)}m/s</span>
-                    </div>
+                    </span>
                   )}
                 </div>
 
-                {/* Engine state status */}
-                <div className="bg-slate-950 border border-black text-white px-2.5 py-0.5 rounded-xl shadow-sm flex flex-col items-center justify-center">
-                  <span className="text-[8px] uppercase font-zinc-400 leading-none font-mono">STATE</span>
-                  <span className={`text-[9px] font-black uppercase ${hudState.isPlayerTurn ? 'text-emerald-400' : 'text-rose-500 animate-pulse'}`}>
-                    {hudState.isPlayerTurn ? 'READY' : 'FIRE'}
+                {/* Turn budget */}
+                <div className="flex items-center gap-1 text-[8px] text-zinc-300 font-mono bg-black/50 border border-white/10 px-2 py-0.5 rounded-lg shadow-md">
+                  <span className="text-amber-400">TURN</span>
+                  <span className={`font-bold ${hudState.maxTurns - hudState.currentTurn <= 1 ? 'text-rose-400 animate-pulse' : 'text-white'}`}>
+                    {hudState.currentTurn}/{hudState.maxTurns}
                   </span>
                 </div>
               </div>
-            )}
 
-            {/* Game Viewport Stage Canvas - STABLE NODE */}
-            <div className="w-full aspect-[1024/600] rounded-[24px] border-4 border-black bg-slate-950 shadow-[8px_8px_0px_#000000] overflow-hidden relative">
-              <div id="phaser-game-container" className="w-full h-full" ref={gameParentRef}></div>
-              
-              {/* Drag Overlay with window listeners capturing pointer events */}
-              {hudState && hudState.isPlayerTurn && !hudState.activeProjectileActive && (
-                <div 
-                  ref={touchZoneRef}
-                  className="absolute inset-0 z-10 cursor-crosshair sm:pointer-events-auto animate-fade-in"
-                  onMouseDown={handleTouchStart}
-                  onTouchStart={handleTouchStart}
-                >
-                  {/* Visual guide overlay */}
-                  <div className="absolute left-4 top-4 bg-slate-900/90 border border-slate-800 rounded-lg p-1.5 max-w-[210px] text-[10px] pointer-events-none font-medium leading-relaxed text-white shadow-lg">
-                    <div className="text-amber-400 font-bold mb-0.5">🎮 드래그 사격 조작법</div>
-                    <div>캐릭터 근처를 터치해 뒤로 당겼다가 놓으면 궤적선 방향으로 포탄을 발사합니다.</div>
+              {/* 2. TOP RIGHT: STATUS, HP, SETTINGS AND RETREAT (Compact Floating Row) */}
+              <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5 pointer-events-auto z-20 select-none">
+                {/* Score & Foes indicator */}
+                <div className="bg-black/50 border border-white/10 px-2 py-0.5 rounded-lg flex items-center gap-1.5 font-mono shadow-md">
+                  <div className="text-[8px] font-black text-amber-300 uppercase">
+                    SCORE <span className="text-white ml-0.5 font-bold">{hudState.score.toLocaleString()}</span>
+                  </div>
+                  <div className="h-2.5 w-[1px] bg-white/15" />
+                  <div className="text-[8px] font-black text-rose-300 uppercase">
+                    FOES <span className="text-white ml-0.5 font-bold">{hudState.enemiesLeft}/{hudState.enemiesTotal}</span>
                   </div>
                 </div>
-              )}
-            </div>
 
-            {/* Game Ticker Scores Display beneath Canvas */}
-            {hudState && (
-              <div className="w-full flex items-center justify-between mt-3 text-xs font-black py-2 gap-2 animate-fade-in">
-                <div className="flex items-center gap-1.5 bg-yellow-400 border px-3 py-1 rounded-xl shadow-sm border-black text-slate-950 font-mono font-bold">
-                  <span>SCORE:</span>
-                  <span className="font-extrabold text-xs">{hudState.score.toLocaleString()}</span>
+                {/* Player HP */}
+                <div className="flex items-center gap-1.5 bg-black/50 border border-white/10 px-2 py-0.5 rounded-lg shadow-md">
+                  <span className="text-[8px]">❤️</span>
+                  <div className="w-10 h-1 bg-black/45 rounded-full overflow-hidden">
+                    <div 
+                      className={`h-full transition-all duration-300 rounded-full ${hudState.playerHp > 50 ? 'bg-emerald-400' : hudState.playerHp > 25 ? 'bg-amber-400' : 'bg-rose-500 animate-pulse'}`} 
+                      style={{ width: `${Math.max(0, Math.min(100, hudState.playerHp))}%` }}
+                    />
+                  </div>
+                  <span className="text-[8px] font-bold text-rose-200 font-mono">{hudState.playerHp}%</span>
                 </div>
-                <div className="flex items-center gap-1.5 bg-red-500 border px-3 py-1 rounded-xl shadow-sm border-black text-white font-mono font-bold">
-                  <span>ENEMIES:</span>
-                  <span className="font-extrabold text-xs">{hudState.enemiesLeft} / {hudState.enemiesTotal}</span>
-                </div>
+
+                {/* Settings gear */}
                 <button
-                  onClick={handleExitToSelect}
-                  className="px-4 py-1 rounded-xl border border-black text-[11px] font-black text-slate-800 hover:text-black bg-white hover:bg-slate-100 transition-all text-center shadow-sm cursor-pointer font-bold"
+                  onClick={(e) => { e.stopPropagation(); setIsSettingsOpen(true); }}
+                  className="p-1.5 bg-black/50 hover:bg-zinc-800 border border-white/10 text-yellow-400 hover:text-white rounded-lg shadow-md transition-all cursor-pointer active:scale-90"
+                  title="게임 옵션 및 비기로그"
                 >
-                  🚪 RETREAT (퇴 각)
+                  <Settings className="w-3 h-3" />
+                </button>
+
+                {/* Exit stage retreat */}
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleExitToSelect(); }}
+                  className="px-2 py-0.5 bg-rose-950/70 hover:bg-rose-900 border border-rose-500/20 text-rose-200 hover:text-white rounded-lg shadow-md transition-all cursor-pointer text-[7.5px] font-bold font-mono tracking-wider"
+                >
+                  🚪 RETREAT
                 </button>
               </div>
-            )}
-          </div>
 
-          {/* Right Column: WEAPONS chooser and Cannon stats controls - Only show when level state is loaded */}
-          {hudState && (
-            isRightCollapsed ? (
-              /* Collapsed Right Tab */
-              <div 
-                onClick={() => setIsRightCollapsed(false)}
-                className="w-8 sm:w-10 bg-white/95 hover:bg-slate-50 border-4 border-black rounded-2xl flex flex-col items-center py-4 px-1 gap-4 shadow-[4px_4px_0px_#000] cursor-pointer transition-all shrink-0 select-none group"
-                title="WEAPONS 무기창 열기"
-              >
-                <button 
-                  className="w-5 h-5 sm:w-6 sm:h-6 rounded-md bg-yellow-400 border-2 border-black flex items-center justify-center font-black text-[9px] shadow-sm cursor-pointer group-hover:scale-110 transition-all font-bold text-slate-900"
-                >
-                  ◀
-                </button>
-                <div className="flex-1 flex flex-col justify-center items-center font-mono font-black text-slate-800 text-[9px] sm:text-[10px] tracking-widest gap-1 uppercase select-none">
-                  <span>W</span>
-                  <span>E</span>
-                  <span>A</span>
-                  <span>P</span>
-                  <span>O</span>
-                  <span>N</span>
-                  <span className="mt-2 text-xs">💣</span>
-                </div>
-              </div>
-            ) : (
-              /* Expanded Right Sidebar - EXACTLY 15% proportional width */
-              <div className="w-[15%] min-w-[125px] max-w-[210px] bg-white/95 border-4 border-black rounded-3xl p-2 sm:p-2.5 flex flex-col justify-between shadow-[6px_6px_0px_#000] shrink-0 max-h-[640px] overflow-y-auto animate-fade-in relative">
-                <div>
-                  <h3 className="text-[10px] font-black text-slate-800 uppercase tracking-wider mb-2 border-b-2 border-black/10 pb-1 flex items-center justify-between">
-                    <span>WEAPONS 💣</span>
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); setIsRightCollapsed(true); }}
-                      className="px-1 sm:px-1.5 py-0.5 rounded-lg bg-slate-100 hover:bg-rose-400 hover:text-white border-2 border-black text-[8px] sm:text-[9px] font-black tracking-tighter leading-none transition-all cursor-pointer font-bold"
-                      title="무기 접기"
-                    >
-                      HIDE ▶
-                    </button>
-                  </h3>
-                  <div className="grid grid-cols-1 gap-1 sm:gap-1.5 mb-1.5">
-                    {hudState.availableWeapons.map((w) => {
-                      const isActive = hudState.selectedWeaponId === w.id;
-                      const hasAmmo = (hudState.ammoRemaining[w.id] ?? 99) > 0;
-                      
-                      let bgClass = 'bg-slate-100';
-                      let emojiSpec = '💣';
-                      if (w.id === 'standard') { bgClass = 'bg-orange-400'; emojiSpec = '💣'; }
-                      else if (w.id === 'split_shot') { bgClass = 'bg-blue-300'; emojiSpec = '☄️'; }
-                      else if (w.id === 'heavy_shell') { bgClass = 'bg-pink-400'; emojiSpec = '🔮'; }
-                      else if (w.id === 'napalm_strike') { bgClass = 'bg-red-400'; emojiSpec = '🔥'; }
-                      else if (w.id === 'bouncy_ball') { bgClass = 'bg-lime-400'; emojiSpec = '🏐'; }
-                      else if (w.id === 'pierce_bullet') { bgClass = 'bg-cyan-400'; emojiSpec = '🚀'; }
-                      else if (w.id === 'gravity_bomb') { bgClass = 'bg-violet-400'; emojiSpec = '🌀'; }
-                      else if (w.id === 'inferno') { bgClass = 'bg-emerald-400'; emojiSpec = '☄️'; }
-
-                      return (
-                        <button
-                          key={w.id}
-                          id={`weapon-btn-${w.id}`}
-                          disabled={!hasAmmo}
-                          onClick={() => handleSelectWeapon(w.id)}
-                          className={`p-1 rounded-lg border-2 flex items-center gap-1 transition-all text-left relative cursor-pointer ${
-                            isActive
-                              ? `${bgClass} border-black ring-2 ring-yellow-400 font-black scale-[1.01] shadow-inner`
-                              : 'bg-white border-black/40 hover:bg-slate-50 hover:border-black shadow-sm'
-                          } ${!hasAmmo ? 'opacity-30 cursor-not-allowed border-black/20' : ''}`}
-                        >
-                          <span className="text-[11px] sm:text-xs shrink-0">{emojiSpec}</span>
-                          <div className="flex-1 min-w-0">
-                            <span className="text-[8px] sm:text-[9px] font-black uppercase text-slate-900 block truncate leading-none">
-                              {w.name.split(' ')[0]}
-                            </span>
-                            <span className="text-[6px] sm:text-[7px] font-mono leading-none text-slate-800 bg-black/10 px-1 rounded mt-0.5 inline-block font-bold">
-                              {hudState.ammoRemaining[w.id] === undefined ? '무한' : `${hudState.ammoRemaining[w.id]}`}
-                            </span>
+              {/* 3. BOTTOM LEFT: SQUAD QUICK SELECTOR & TACTICAL MOVE KEYS (Planted Floating) */}
+              <div className="absolute left-2.5 bottom-2.5 flex flex-col gap-1.5 pointer-events-auto z-20 select-none">
+                {/* Character Choose Tiny Buttons */}
+                <div className="flex flex-col gap-1 bg-black/35 border border-white/10 p-0.5 rounded-lg shadow-lg">
+                  {hudState.availableChars.map((char) => {
+                    const isActive = hudState.selectedCharId === char.id;
+                    const charEmoji = char.id === 'lumi' ? '🐱' : char.id === 'torbo' ? '🐗' : char.id === 'pico' ? '🐿️' : char.id === 'bumba' ? '🦎' : '🐈';
+                    return (
+                      <button
+                        key={char.id}
+                        onClick={(e) => { e.stopPropagation(); handleSelectCharacter(char.id); }}
+                        className={`px-1 lg:px-1.5 py-0.5 rounded-md flex items-center gap-1 border transition-all text-left cursor-pointer ${
+                          isActive
+                            ? 'bg-emerald-500/80 border-emerald-400 text-white shadow-md scale-102 font-black'
+                            : 'bg-black/50 border-white/5 hover:bg-black/70 text-zinc-300'
+                        }`}
+                        style={{ width: '68px' }}
+                      >
+                        <span className="text-[9.5px] shrink-0">{charEmoji}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[7.5px] font-black uppercase font-mono leading-none truncate">{char.id}</div>
+                          <div className="h-0.5 bg-black/40 rounded-full overflow-hidden mt-0.5">
+                            <div className="h-full bg-emerald-400" style={{ width: `${char.hp}%` }} />
                           </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  <div className="bg-sky-50 border border-sky-200 rounded-xl p-1.5 text-[8px] sm:text-[9px] text-slate-800 font-medium leading-tight">
-                    <span className="font-black text-sky-950 text-[9px] sm:text-[10px]">🔮 {hudState.availableWeapons.find(w => w.id === hudState.selectedWeaponId)?.name}: </span>
-                    <p className="mt-0.5 leading-snug font-mono text-[8px] sm:text-[9px]">{hudState.availableWeapons.find(w => w.id === hudState.selectedWeaponId)?.desc}</p>
-                  </div>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
 
-                {/* Cannon Controls and Live Fire Button */}
-                <div className="bg-yellow-400 border-2 border-black rounded-xl p-1.5 sm:p-2 text-slate-950 mt-2 font-semibold">
-                  <h4 className="text-[8px] sm:text-[9px] font-black text-slate-900 uppercase tracking-wider mb-1 border-b border-black/20 pb-0.5 font-mono">
-                    CANNON 🎯
-                  </h4>
-                  
+                {/* Move Left / Right keys */}
+                <div className="bg-black/40 border border-white/10 rounded-lg p-0.5 flex gap-1 shadow-lg">
+                  <button 
+                    disabled={!hudState.isPlayerTurn || hudState.activeProjectileActive}
+                    onClick={(e) => { e.stopPropagation(); handleMovePlayer('left'); }}
+                    className="flex-1 py-1 px-1.5 bg-black/45 hover:bg-amber-400 hover:text-black text-white rounded border border-white/5 active:scale-95 transition-all text-center cursor-pointer flex items-center justify-center disabled:opacity-20 disabled:pointer-events-none"
+                    title="Move Left [A]"
+                  >
+                    <ChevronLeft className="w-3 h-3" />
+                  </button>
+                  <button 
+                    disabled={!hudState.isPlayerTurn || hudState.activeProjectileActive}
+                    onClick={(e) => { e.stopPropagation(); handleMovePlayer('right'); }}
+                    className="flex-1 py-1 px-1.5 bg-black/45 hover:bg-amber-400 hover:text-black text-white rounded border border-white/5 active:scale-95 transition-all text-center cursor-pointer flex items-center justify-center disabled:opacity-20 disabled:pointer-events-none"
+                    title="Move Right [D]"
+                  >
+                    <ChevronRight className="w-3 h-3" />
+                  </button>
+                </div>
+              </div>
+
+              {/* 4. BOTTOM RIGHT: SCI-FI WEAPONS ROW & CASSINI PRECISION INPUTS */}
+              <div className="absolute right-2.5 bottom-2.5 flex flex-col gap-1.5 pointer-events-auto z-20 select-none">
+                {/* Weapons Horizontal Ribbon Grid */}
+                <div className="flex gap-1 bg-black/35 border border-white/10 p-0.5 rounded-lg shadow-lg max-w-[210px] overflow-x-auto">
+                  {hudState.availableWeapons.map((w) => {
+                    const isActive = hudState.selectedWeaponId === w.id;
+                    const hasAmmo = (hudState.ammoRemaining[w.id] ?? 99) > 0;
+                    let bgClass = 'bg-orange-500/80 border-orange-400 text-white';
+                    let emojiSpec = '💣';
+                    if (w.id === 'standard') { bgClass = 'bg-orange-500/80 border-orange-400 text-white'; emojiSpec = '💣'; }
+                    else if (w.id === 'split_shot') { bgClass = 'bg-sky-400/80 border-sky-300 text-white'; emojiSpec = '☄️'; }
+                    else if (w.id === 'heavy_shell') { bgClass = 'bg-pink-500/80 border-pink-400 text-white'; emojiSpec = '🔮'; }
+                    else if (w.id === 'napalm_strike') { bgClass = 'bg-red-500/80 border-red-400 text-white'; emojiSpec = '🔥'; }
+                    else if (w.id === 'bouncy_ball') { bgClass = 'bg-lime-500/80 border-lime-400 text-white'; emojiSpec = '🏐'; }
+                    else if (w.id === 'pierce_bullet') { bgClass = 'bg-cyan-500/80 border-cyan-400 text-white'; emojiSpec = '🚀'; }
+                    else if (w.id === 'gravity_bomb') { bgClass = 'bg-violet-500/80 border-violet-400 text-white'; emojiSpec = '🌀'; }
+                    else if (w.id === 'inferno') { bgClass = 'bg-emerald-500/80 border-emerald-400 text-white'; emojiSpec = '☄️'; }
+
+                    return (
+                      <button
+                        key={w.id}
+                        disabled={!hasAmmo}
+                        onClick={(e) => { e.stopPropagation(); handleSelectWeapon(w.id); }}
+                        className={`p-1 rounded-md border flex flex-col items-center justify-center transition-all text-center cursor-pointer relative shrink-0 ${
+                          isActive
+                            ? `${bgClass} shadow-md scale-102 font-black`
+                            : 'bg-black/50 border-white/5 hover:bg-black/70 text-zinc-300'
+                        } ${!hasAmmo ? 'opacity-20 cursor-not-allowed' : ''}`}
+                        style={{ width: '38px', height: '36px' }}
+                        title={w.name}
+                      >
+                        <span className="text-[11px] leading-none mb-0.5">{emojiSpec}</span>
+                        <span className="text-[6px] font-mono leading-none font-bold">
+                          {hudState.ammoRemaining[w.id] === undefined ? '∞' : `${hudState.ammoRemaining[w.id]}`}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Interactive sliders + Fire trigger button */}
+                <div className="bg-black/50 border border-white/10 rounded-xl p-1.5 text-white font-mono flex flex-col gap-1 w-[165px] self-end shadow-lg backdrop-blur-sm">
                   {/* Angle slider */}
-                  <div className="mb-1">
-                    <div className="flex items-center justify-between text-[8px] sm:text-[9px] font-black mb-0.5 text-slate-900">
-                      <span>각도</span>
-                      <span className="text-red-700 font-extrabold text-[8px] sm:text-[9px] bg-white border border-black px-1 rounded font-mono leading-none">{cannonAngle}°</span>
+                  <div>
+                    <div className="flex items-center justify-between text-[7.5px] font-semibold">
+                      <span>DEGREE</span>
+                      <span className="text-amber-300 font-bold font-mono">{cannonAngle}°</span>
                     </div>
                     <input 
                       type="range"
@@ -622,15 +535,15 @@ export default function App() {
                       max="170"
                       value={cannonAngle}
                       onChange={(e) => setCannonAngle(Number(e.target.value))}
-                      className="w-full accent-black cursor-pointer h-1 bg-white rounded-full appearance-none border border-black"
+                      className="w-full accent-amber-400 cursor-pointer h-1 bg-white/5 rounded appearance-none m-0 p-0"
                     />
                   </div>
 
                   {/* Power slider */}
-                  <div className="mb-1.5">
-                    <div className="flex items-center justify-between text-[8px] sm:text-[9px] font-black mb-0.5 text-slate-900">
-                      <span>파워</span>
-                      <span className="text-amber-900 font-extrabold text-[8px] sm:text-[9px] bg-white border border-black px-1 rounded font-mono leading-none">{cannonPower}%</span>
+                  <div>
+                    <div className="flex items-center justify-between text-[7.5px] font-semibold mt-0.5">
+                      <span>POWER</span>
+                      <span className="text-amber-300 font-bold font-mono">{cannonPower}%</span>
                     </div>
                     <input 
                       type="range"
@@ -638,28 +551,195 @@ export default function App() {
                       max="100"
                       value={cannonPower}
                       onChange={(e) => setCannonPower(Number(e.target.value))}
-                      className="w-full accent-black cursor-pointer h-1 bg-white rounded-full appearance-none border border-black"
+                      className="w-full accent-amber-400 cursor-pointer h-1 bg-white/5 rounded appearance-none m-0 p-0"
                     />
                   </div>
 
-                  {/* Live fire button */}
+                  {/* Action Fire button */}
                   <button
-                    id="fire-cannon-btn"
                     disabled={!hudState.isPlayerTurn || hudState.activeProjectileActive}
-                    onClick={handleFireCannon}
-                    className="w-full h-8 sm:h-9 bg-red-600 hover:bg-red-700 text-white font-black rounded-lg border-2 border-black border-b-4 flex items-center justify-center select-none cursor-pointer active:scale-95 transition-all shadow-sm font-bold"
+                    onClick={(e) => { e.stopPropagation(); handleFireCannon(); }}
+                    className="w-full mt-1 py-1 bg-rose-600 hover:bg-rose-700 border border-rose-500/40 text-white rounded font-bold transition-all text-center flex items-center justify-center disabled:opacity-30 cursor-pointer active:scale-[0.98]"
+                    title="Artillery Shot [SPACE]"
                   >
-                    <span className="text-[8px] sm:text-[9px] font-black italic tracking-wide uppercase leading-none font-bold">
-                      {!hudState.isPlayerTurn ? 'WAIT...' : hudState.activeProjectileActive ? 'FIRE...' : 'FIRE!'}
+                    <span className="text-[7.5px] font-black uppercase tracking-wide leading-none">
+                      {!hudState.isPlayerTurn ? 'WAIT' : hudState.activeProjectileActive ? 'TRACK..' : 'CANNON 🎯'}
                     </span>
                   </button>
                 </div>
               </div>
-            )
+            </>
           )}
 
         </div>
       </main>
+
+      {/* SYSTEM SETTINGS & GAMEPLAY INTEL MODAL DIALOG */}
+      {isSettingsOpen && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-45 flex items-center justify-center p-4 animate-fade-in select-none">
+          <div className="w-full max-w-2xl bg-slate-900 border-2 border-zinc-800 rounded-3xl p-5 sm:p-6 shadow-2xl relative animate-scale-up">
+            
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-3 mb-4">
+              <div className="flex items-center gap-2">
+                <span className="text-yellow-400 text-lg">⚙️</span>
+                <h2 className="text-sm sm:text-base font-black tracking-tight text-white uppercase font-mono">
+                  Fortress Intel & System Configuration
+                </h2>
+              </div>
+              <button 
+                onClick={() => setIsSettingsOpen(false)}
+                className="p-1.5 rounded-lg bg-zinc-800 hover:bg-rose-600 hover:text-white transition-all cursor-pointer text-zinc-400"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[350px] overflow-y-auto pr-1">
+              
+              {/* Sound toggle panel */}
+              <div className="bg-white/5 border border-white/5 rounded-2xl p-3 flex flex-col justify-between">
+                <div>
+                  <h3 className="text-zinc-200 font-bold font-mono text-xs mb-1 uppercase flex items-center gap-1.5">
+                    <span>🔊 Hardware Audio Controls</span>
+                  </h3>
+                  <p className="text-[10px] text-zinc-400 mb-3 leading-relaxed">
+                    실시간 사운드 상태를 컨트롤합니다. 대포 조준 주파수 웅웅거림 효과음 및 비행 바람 가르는 리얼타임 휘슬음이 구현되어 있습니다.
+                  </p>
+                </div>
+                
+                <button
+                  onClick={handleToggleSound}
+                  className={`w-full py-1.5 px-3 rounded-lg border font-black text-xs transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                    soundOn 
+                    ? 'bg-emerald-500/70 border-emerald-400 text-white' 
+                    : 'bg-zinc-800 border-zinc-700 text-zinc-300'
+                  }`}
+                >
+                  {soundOn ? (
+                    <>
+                      <Volume2 className="w-3.5 h-3.5" />
+                      <span>SOUND EFFECTS: ACTIVE (ON)</span>
+                    </>
+                  ) : (
+                    <>
+                      <VolumeX className="w-3.5 h-3.5" />
+                      <span>SOUND EFFECTS: MUTED (OFF)</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Progress Reset panel */}
+              <div className="bg-white/5 border border-white/5 rounded-2xl p-3 flex flex-col justify-between">
+                <div>
+                  <h3 className="text-zinc-200 font-bold font-mono text-xs mb-1 uppercase">
+                    ⚠️ Reset Game progress
+                  </h3>
+                  <p className="text-[10px] text-zinc-400 mb-3 leading-relaxed">
+                    기록되어 있는 점수 및 스테이지 클리어 언락 내역과 저장 데이터를 초기화 한 후 1스테이지 목록으로 롤백합니다.
+                  </p>
+                </div>
+                
+                <button
+                  onClick={() => {
+                    if (confirm("정말로 모든 게임 진행 레벨과 점수를 초기화하시겠습니까?")) {
+                      SaveSystem.resetProgress();
+                      window.location.reload();
+                    }
+                  }}
+                  className="w-full py-1.5 px-3 rounded-lg border border-rose-500/40 bg-rose-950/20 text-rose-300 hover:bg-rose-900/60 hover:text-white transition-all font-black text-xs cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  🗑️ RESET PROGRESS
+                </button>
+              </div>
+
+              {/* Squad Troops explanation */}
+              <div className="bg-white/5 border border-white/5 rounded-2xl p-3 col-span-1 md:col-span-2">
+                <h3 className="text-amber-400 font-bold font-mono text-xs mb-2 uppercase">
+                  🐾 SQUAD TROOPS DIRECTORY
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[9.5px]">
+                  <div className="bg-black/25 p-2 rounded-xl border border-white/5">
+                    <span className="font-bold text-zinc-200">🐱 LUMI (Ranger):</span>
+                    <p className="text-zinc-400 mt-0.5">가장 가볍고 민첩함. 기본 포탄 사격. 날아가는 포물선 궤적이 장쾌하여 격돌 고도를 미세 타격하는 사격에 이상적입니다.</p>
+                  </div>
+                  <div className="bg-black/25 p-2 rounded-xl border border-white/5">
+                    <span className="font-bold text-zinc-200">🐗 TORBO (Vanguard):</span>
+                    <p className="text-zinc-400 mt-0.5">묵직한 멧돼지 돌격장군. 하강할 때 가속도가 붙으며, 접지 파괴 점프 범위가 아주 커서 조밀한 적 진영 붕괴용입니다.</p>
+                  </div>
+                  <div className="bg-black/25 p-2 rounded-xl border border-white/5">
+                    <span className="font-bold text-zinc-200">🐿️ PICO (Artillery):</span>
+                    <p className="text-zinc-400 mt-0.5">도토리 화염 연쇄 포격이 가능하며, 민첩하면서 정교한 투사 각도로 다점 피격 타점을 생성하는 화력 수급 요원.</p>
+                  </div>
+                  <div className="bg-black/25 p-2 rounded-xl border border-white/5">
+                    <span className="font-bold text-zinc-200">🦎 BUMBA (Grenadier):</span>
+                    <p className="text-zinc-400 mt-0.5">산성 점액 유탄 고폭탄두를 가공 분출. 장애물과 지면 지형 기공을 강력하게 부식시키는 침식 특장 전투병입니다.</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Weapons intel */}
+              <div className="bg-white/5 border border-white/5 rounded-2xl p-3 col-span-1 md:col-span-2">
+                <h3 className="text-sky-300 font-bold font-mono text-xs mb-2 uppercase">
+                  💣 SCI-FI WEAPONS PROTOCOL
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[9.5px] text-zinc-400">
+                  <div>
+                    <span className="text-zinc-200 font-bold">• Standard Bomb (💣):</span> 기본 고성능 화약 성분의 기초 유탄.
+                  </div>
+                  <div>
+                    <span className="text-zinc-200 font-bold">• Split Shot (☄️):</span> 비행 타겟 중 공중 폭산 분산되는 확산포.
+                  </div>
+                  <div>
+                    <span className="text-zinc-200 font-bold">• Heavy Shell (🔮):</span> 묵직한 하강 질량으로 장갑벽을 단번에 부수는 대공포.
+                  </div>
+                  <div>
+                    <span className="text-zinc-200 font-bold">• Napalm Strike (🔥):</span> 화염 장막 가연성 타르 지대를 주입하여 연속 도트 가스피해 유도.
+                  </div>
+                  <div>
+                    <span className="text-zinc-200 font-bold">• Bouncy Ball (🏐):</span> 단단한 강도를 보강한 탄성 도면 바운싱 무쇠볼.
+                  </div>
+                  <div>
+                    <span className="text-zinc-200 font-bold">• Pierce Bullet (🚀):</span> 암석 및 성벽 지대를 고속 회전하여 터널링해 안쪽에 폭사.
+                  </div>
+                  <div>
+                    <span className="text-zinc-200 font-bold">• Gravity Bomb (🌀):</span> 적의 미세 파편과 잔해를 압밀해 중앙으로 모아 수축 폭발.
+                  </div>
+                  <div>
+                    <span className="text-zinc-200 font-bold">• Inferno (☄️):</span> 하늘에서 운석 종렬포화 3발이 융단 포화하는 최고 무기.
+                  </div>
+                </div>
+              </div>
+
+              {/* Game keys shortcut panel */}
+              <div className="bg-white/5 border border-white/5 rounded-2xl p-3 col-span-1 md:col-span-2 text-[10px] text-zinc-300 font-mono leading-relaxed">
+                <span className="text-amber-400 font-bold text-[10.5px] uppercase block mb-1">⌨️ SYSTEM KEY CONTROLS</span>
+                <div className="grid grid-cols-2 gap-2 text-[9.5px] text-zinc-400">
+                  <div>• <span className="text-zinc-100">[A / D]</span> 또는 <span className="text-zinc-100">[◀ / ▶]</span> : 전술 캐릭터 수류 기동</div>
+                  <div>• <span className="text-zinc-100">[W / S]</span> 또는 <span className="text-zinc-100">[▲ / ▼]</span> : 각도 조절</div>
+                  <div>• <span className="text-zinc-100">[SPACE]</span> : 대포 수동 대포알 발사</div>
+                  <div>• <span className="text-zinc-100">마우스 드래그 슬링샷</span> : 수동 당겨 조준 발사 조작</div>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Modal Bottom close */}
+            <div className="flex justify-end mt-4 border-t border-zinc-800 pt-3">
+              <button 
+                onClick={() => setIsSettingsOpen(false)}
+                className="px-5 py-2 rounded-xl bg-yellow-400 hover:bg-yellow-500 text-slate-950 font-black text-xs transition-all cursor-pointer font-bold uppercase tracking-wider"
+              >
+                Close Intel
+              </button>
+            </div>
+            
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
