@@ -313,8 +313,29 @@ export default function App() {
       setIsFullscreen(!!document.fullscreenElement);
     };
     document.addEventListener('fullscreenchange', handleFullscreenChange);
+
+    // Prompt-fee immediate run
+    document.documentElement.requestFullscreen().catch(() => {
+      // Quietly ignore since standard browsers sometimes block prompt-less startup transitions
+    });
+
+    // Extremely robust click/touch listener: triggers immediate fullscreen on first interaction
+    const triggerFullscreenOnFirstInteract = () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      }
+      // Remove to prevent multiple calls
+      window.removeEventListener('click', triggerFullscreenOnFirstInteract, true);
+      window.removeEventListener('touchstart', triggerFullscreenOnFirstInteract, true);
+    };
+
+    window.addEventListener('click', triggerFullscreenOnFirstInteract, true);
+    window.addEventListener('touchstart', triggerFullscreenOnFirstInteract, true);
+
     return () => {
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      window.removeEventListener('click', triggerFullscreenOnFirstInteract, true);
+      window.removeEventListener('touchstart', triggerFullscreenOnFirstInteract, true);
     };
   }, []);
 
