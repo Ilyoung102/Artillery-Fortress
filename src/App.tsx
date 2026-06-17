@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createGame } from './game/GameRoot';
 import { Game } from 'phaser';
-import { Settings, Volume2, VolumeX, HelpCircle, X, ChevronLeft, ChevronRight, Info } from 'lucide-react';
+import { Settings, Volume2, VolumeX, HelpCircle, X, ChevronLeft, ChevronRight, Info, Maximize } from 'lucide-react';
 import { SaveSystem } from './game/systems/SaveSystem';
 
 // Interface matching Phaser GameScene.notifyHUD payload
@@ -306,6 +306,29 @@ export default function App() {
     }
   };
 
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    };
+  }, []);
+
+  const toggleFullscreen = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch((err) => {
+        console.error(`Fullscreen request failed: ${err.message}`);
+      });
+    } else {
+      document.exitFullscreen();
+    }
+  };
+
   return (
     <div id="artillery-app-root" className="h-screen w-screen max-w-full max-h-full overflow-hidden bg-gradient-to-b from-[#111827] via-[#0f172a] to-[#020617] flex flex-col items-center justify-center font-sans antialiased select-none text-slate-100 p-1 sm:p-3 relative">
       
@@ -403,6 +426,15 @@ export default function App() {
                   </div>
                   <span className="text-[8px] font-bold text-rose-200 font-mono">{hudState.playerHp}%</span>
                 </div>
+
+                {/* Fullscreen Toggle */}
+                <button
+                  onClick={toggleFullscreen}
+                  className="p-1.5 bg-black/50 hover:bg-zinc-800 border border-white/10 text-sky-400 hover:text-white rounded-lg shadow-md transition-all cursor-pointer active:scale-90"
+                  title="전체화면 토글"
+                >
+                  <Maximize className="w-3 h-3" />
+                </button>
 
                 {/* Settings gear */}
                 <button
@@ -514,10 +546,10 @@ export default function App() {
                 </div>
 
                 {/* Interactive sliders + Fire trigger button */}
-                <div className="bg-black/50 border border-white/10 rounded-xl p-1.5 text-white font-mono flex flex-col gap-1 w-[165px] self-end shadow-lg backdrop-blur-sm">
+                <div className="bg-black/20 border border-white/5 rounded-lg p-1 text-white font-mono flex flex-col gap-0.5 w-[110px] self-end shadow-md">
                   {/* Angle slider */}
                   <div>
-                    <div className="flex items-center justify-between text-[7.5px] font-semibold">
+                    <div className="flex items-center justify-between text-[6.5px] font-semibold">
                       <span>DEGREE</span>
                       <span className="text-amber-300 font-bold font-mono">{cannonAngle}°</span>
                     </div>
@@ -527,13 +559,13 @@ export default function App() {
                       max="170"
                       value={cannonAngle}
                       onChange={(e) => setCannonAngle(Number(e.target.value))}
-                      className="w-full accent-amber-400 cursor-pointer h-1 bg-white/5 rounded appearance-none m-0 p-0"
+                      className="w-full accent-amber-400 cursor-pointer h-0.5 bg-white/5 rounded appearance-none m-0 p-0"
                     />
                   </div>
 
                   {/* Power slider */}
                   <div>
-                    <div className="flex items-center justify-between text-[7.5px] font-semibold mt-0.5">
+                    <div className="flex items-center justify-between text-[6.5px] font-semibold mt-0.5">
                       <span>POWER</span>
                       <span className="text-amber-300 font-bold font-mono">{cannonPower}%</span>
                     </div>
@@ -543,7 +575,7 @@ export default function App() {
                       max="100"
                       value={cannonPower}
                       onChange={(e) => setCannonPower(Number(e.target.value))}
-                      className="w-full accent-amber-400 cursor-pointer h-1 bg-white/5 rounded appearance-none m-0 p-0"
+                      className="w-full accent-amber-400 cursor-pointer h-0.5 bg-white/5 rounded appearance-none m-0 p-0"
                     />
                   </div>
 
@@ -551,11 +583,11 @@ export default function App() {
                   <button
                     disabled={!hudState.isPlayerTurn || hudState.activeProjectileActive}
                     onClick={(e) => { e.stopPropagation(); handleFireCannon(); }}
-                    className="w-full mt-1 py-1 bg-rose-600 hover:bg-rose-700 border border-rose-500/40 text-white rounded font-bold transition-all text-center flex items-center justify-center disabled:opacity-30 cursor-pointer active:scale-[0.98]"
+                    className="w-full mt-0.5 py-0.5 bg-rose-600/90 hover:bg-rose-700/90 border border-rose-500/20 text-white rounded font-bold transition-all text-center flex items-center justify-center disabled:opacity-30 cursor-pointer active:scale-[0.98]"
                     title="Artillery Shot [SPACE]"
                   >
-                    <span className="text-[7.5px] font-black uppercase tracking-wide leading-none">
-                      {!hudState.isPlayerTurn ? 'WAIT' : hudState.activeProjectileActive ? 'TRACK..' : 'CANNON 🎯'}
+                    <span className="text-[6.5px] font-black uppercase tracking-wide leading-none">
+                      {!hudState.isPlayerTurn ? 'WAIT' : hudState.activeProjectileActive ? 'TRACK' : 'CANNON 🎯'}
                     </span>
                   </button>
                 </div>
@@ -731,6 +763,15 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* 랜드스케이프 전용 모드 전환 가이드 */}
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-950 p-6 text-center select-none portrait:flex landscape:hidden">
+        <div className="text-4xl mb-3 animate-bounce">🔄</div>
+        <h2 className="text-base font-black text-white mb-1">가로모드로 전환해 주세요</h2>
+        <p className="text-[10px] text-zinc-400 max-w-xs leading-relaxed">
+          이 게임은 가로모드(Landscape) 전용으로 설계되었습니다. 더욱 광활하고 균형 잡힌 전술 포격을 위해 기기를 가로로 돌려주세요!
+        </p>
+      </div>
 
     </div>
   );
