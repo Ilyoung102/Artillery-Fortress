@@ -752,23 +752,23 @@ export default function App() {
                 </div>
               </div>
 
-              {/* 🎮 Tactile Gamepad Left/Right keys - Placed at the LEFT CENTER of screen with 50% larger height for outstanding mobile ergonomics! */}
-              <div className="absolute left-3.5 top-[50%] -translate-y-1/2 bg-slate-900/90 border border-white/15 rounded-2xl p-1.5 flex gap-2 shadow-2xl w-[138px] pointer-events-auto z-20 select-none">
+              {/* 🎮 Tactile Gamepad Left/Right keys - Reduced in size by 50% with clean 30% opacity styling and high-responsiveness */}
+              <div className="absolute left-2.5 top-[50%] -translate-y-1/2 bg-slate-900/95 border border-white/15 rounded-xl p-1 flex gap-1 shadow-2xl w-[82px] pointer-events-auto z-20 select-none opacity-30 hover:opacity-80 active:opacity-100 transition-opacity duration-200">
                 <button 
                   onClick={(e) => { e.stopPropagation(); handleMovePlayer('left'); }}
-                  className="flex-1 h-14 bg-black/55 hover:bg-amber-450 hover:text-slate-950 text-white rounded-xl border border-white/10 active:scale-90 transition-all text-center cursor-pointer flex flex-col items-center justify-center gap-1"
+                  className="flex-1 h-9 bg-black/60 hover:bg-amber-450 hover:text-slate-950 text-white rounded-lg border border-white/10 active:scale-90 transition-all text-center cursor-pointer flex flex-col items-center justify-center gap-0.5"
                   title="Move Left [A]"
                 >
-                  <ChevronLeft className="w-5 h-5 text-amber-400" />
-                  <span className="text-[7.5px] font-black tracking-tight leading-none font-sans">LEFT</span>
+                  <ChevronLeft className="w-4 h-4 text-amber-400" />
+                  <span className="text-[6.5px] font-black tracking-tight leading-none font-sans">LEFT</span>
                 </button>
                 <button 
                   onClick={(e) => { e.stopPropagation(); handleMovePlayer('right'); }}
-                  className="flex-1 h-14 bg-black/55 hover:bg-amber-450 hover:text-slate-950 text-white rounded-xl border border-white/10 active:scale-90 transition-all text-center cursor-pointer flex flex-col items-center justify-center gap-1"
+                  className="flex-1 h-9 bg-black/60 hover:bg-amber-450 hover:text-slate-950 text-white rounded-lg border border-white/10 active:scale-90 transition-all text-center cursor-pointer flex flex-col items-center justify-center gap-0.5"
                   title="Move Right [D]"
                 >
-                  <ChevronRight className="w-5 h-5 text-amber-400" />
-                  <span className="text-[7.5px] font-black tracking-tight leading-none font-sans">RIGHT</span>
+                  <ChevronRight className="w-4 h-4 text-amber-400" />
+                  <span className="text-[6.5px] font-black tracking-tight leading-none font-sans">RIGHT</span>
                 </button>
               </div>
 

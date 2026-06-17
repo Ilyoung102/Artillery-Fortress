@@ -57,7 +57,7 @@ export class WindSystem {
   public getForceX(bodyMass: number): number {
     // scale factor so that the force is balanced and playable
     // Typically wind force should be proportional to body mass (or a constant acceleration independent of mass)
-    const ACCEL_FACTOR = 0.00015; 
+    const ACCEL_FACTOR = 0.000075; 
     return this.strength * ACCEL_FACTOR * bodyMass;
   }
 }

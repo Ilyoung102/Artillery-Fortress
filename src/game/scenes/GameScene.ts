@@ -1109,7 +1109,7 @@ export class GameScene extends Scene {
     // Constant gravity values in Matter
     const gY = 0.40; // Simulated gravity acceleration
     const gX = 0;
-    const wX = this.windSystem.getStrength() * 0.006; // Wind force translation
+    const wX = this.windSystem.getStrength() * 0.003; // Wind force translation
 
     const points = TrajectorySystem.predict(sx, sy, vx, vy, gX, gY, wX, 35, 1.25);
 
@@ -1830,8 +1830,8 @@ export class GameScene extends Scene {
 
     const totalDX = targetX - launchStartX;
 
-    // Exact wind compensator: matches player-side trajectory prediction: const wX = strength * 0.006
-    const wX = this.windSystem.getStrength() * 0.006;
+    // Exact wind compensator: matches player-side trajectory prediction: const wX = strength * 0.003
+    const wX = this.windSystem.getStrength() * 0.003;
     let baseVx = (totalDX - 0.5 * wX * t_total * t_total) / t_total;
 
     // Base vertical launch speed required to climb to the peakY altitude
