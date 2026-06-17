@@ -85,4 +85,14 @@
   display: block !important;
 }
 
+html, body {
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  overflow: hidden !important;
+  overscroll-behavior: none !important;
+  background-color: #020617 !important;
+}
+
 

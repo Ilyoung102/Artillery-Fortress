@@ -307,31 +307,31 @@ export default function App() {
   };
 
   return (
-    <div id="artillery-app-root" className="min-h-screen w-full bg-gradient-to-b from-[#111827] via-[#0f172a] to-[#020617] flex flex-col items-center justify-center font-sans antialiased select-none text-slate-100 p-2 sm:p-4 relative">
+    <div id="artillery-app-root" className="h-screen w-screen max-w-full max-h-full overflow-hidden bg-gradient-to-b from-[#111827] via-[#0f172a] to-[#020617] flex flex-col items-center justify-center font-sans antialiased select-none text-slate-100 p-1 sm:p-3 relative">
       
       {/* Sleek Minimal Header - UI is completely focused inside the viewport element once you enter active stage */}
       {!hudState && (
-        <header className="w-full max-w-[1024px] px-5 py-3.5 flex items-center justify-between border border-white/10 bg-slate-900/40 backdrop-blur-md z-10 rounded-2xl shadow-xl mb-4 animate-fade-in">
+        <header className="w-full max-w-[1024px] px-5 py-2.5 flex items-center justify-between border border-white/10 bg-slate-900/40 backdrop-blur-md z-10 rounded-2xl shadow-lg mb-2 animate-fade-in shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-yellow-400 border border-slate-950 rounded-xl shadow-md font-bold text-slate-950 text-lg flex items-center justify-center transform -rotate-3">
+            <div className="w-8 h-8 bg-yellow-400 border border-slate-950 rounded-xl shadow-md font-bold text-slate-950 text-base flex items-center justify-center transform -rotate-3">
               🏰
             </div>
             <div>
-              <h1 className="text-base sm:text-lg font-black tracking-tight text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.4)]">
+              <h1 className="text-sm sm:text-base font-black tracking-tight text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.4)]">
                 Fortress Fury
               </h1>
-              <p className="text-[8px] uppercase font-bold text-yellow-300 tracking-widest font-mono">Animal Warriors</p>
+              <p className="text-[7.5px] uppercase font-bold text-yellow-300 tracking-widest font-mono">Animal Warriors</p>
             </div>
           </div>
-          <div className="flex items-center gap-2 text-[10px] font-mono font-bold text-emerald-400 bg-black/40 px-3 py-1 rounded-xl border border-white/5 uppercase">
+          <div className="flex items-center gap-2 text-[9px] font-mono font-bold text-emerald-400 bg-black/40 px-2.5 py-0.5 rounded-lg border border-white/5 uppercase">
             ● Live Engine
           </div>
         </header>
       )}
 
       {/* Main Game Block */}
-      <main className="w-full max-w-[1024px] flex flex-col items-center justify-center relative">
-        <div className="w-full aspect-[1024/600] rounded-[24px] border-4 border-slate-950 bg-slate-950 shadow-[0_20px_40px_rgba(0,0,0,0.8)] overflow-hidden relative select-none">
+      <main className="w-full max-w-[1024px] max-h-[calc(100vh-20px)] flex flex-col items-center justify-center relative overflow-hidden shrink">
+        <div className="w-full aspect-[1024/600] max-h-[min(92vh,600px)] rounded-[24px] border-4 border-slate-950 bg-slate-950 shadow-[0_10px_30px_rgba(0,0,0,0.8)] overflow-hidden relative select-none">
           {/* Phaser HTML Element */}
           <div id="phaser-game-container" className="w-full h-full" ref={gameParentRef}></div>
           
@@ -342,15 +342,7 @@ export default function App() {
               className="absolute inset-0 z-10 cursor-crosshair sm:pointer-events-auto animate-fade-in"
               onMouseDown={handleTouchStart}
               onTouchStart={handleTouchStart}
-            >
-              {/* Floating micro instruction guide */}
-              <div className="absolute left-3 bottom-3 bg-slate-950/70 backdrop-blur-md border border-white/10 rounded-xl p-2 max-w-[190px] text-[8.5px] pointer-events-none font-medium leading-relaxed text-zinc-300 shadow-2xl">
-                <div className="text-amber-400 font-bold mb-0.5 flex items-center gap-1">
-                  <span>🎮</span> slingshot 조작
-                </div>
-                <div>아바타 주변을 스크롤/터치하여 뒤로 잡아당겼다가 손을 떼어 파워를 주입해 조준 포격합니다.</div>
-              </div>
-            </div>
+            />
           )}
 
           {/* HUD GLASS OVERLAYS - FLUID INTEGRATED INSIDE MAIN GAMEBOARD */}

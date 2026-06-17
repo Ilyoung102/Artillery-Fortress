@@ -1508,32 +1508,8 @@ export class GameScene extends Scene {
     if (weapon.specialEffect === 'gravity') craterRadius = 45;
     if (weapon.id === 'bomb') craterRadius = 40;
 
-    // Helper to evaluate if explosion actually overlaps physical land platforms or hills (not empty sky)
-    const overlapsLand = (x: number, y: number, r: number) => {
-      // Left land player platform
-      if (x >= -r && x <= 420 + r && y >= this.playerBaseY - r) return true;
-      // Right land enemy platform
-      if (x >= 650 - r && x <= 1024 + r && y >= this.enemyBaseY - r) return true;
-      // Mid hill 1
-      if (this.hasMiddleHill1 && x >= 480 - r && x <= 590 + r && y >= 480 - r) return true;
-      // Mid hill 2
-      if (this.hasMiddleHill2 && x >= 500 - r && x <= 580 + r && y >= 420 - r) return true;
-      return false;
-    };
-
-    // ONLY generate a crater if the explosion overlaps physical terra-firma (avoids floating circle indicators in sky!)
-    if (overlapsLand(exX, exY, craterRadius)) {
-      this.craters.push({
-        x: exX,
-        y: Phaser.Math.Clamp(exY, 200, 580), // Clamp crater center so it hollows out terrain perfectly
-        radius: craterRadius
-      });
-      // Limit total saved craters list to improve performance
-      if (this.craters.length > 25) {
-        this.craters.shift();
-      }
-      this.drawTerrain();
-    }
+    // No longer generate problematic visual craters to avoid unseemly permanent colored circles in the sky and terrain
+    this.drawTerrain();
 
     // Apply radial physical forces to adjacent dynamic blocks & deal splash damage
     this.blockHealthMap.forEach((record, b) => {
@@ -1847,12 +1823,12 @@ export class GameScene extends Scene {
       noiseRange = 0.01; // Level 10-12 (Final Bosses): Ruthless sniper precision, perfect targeting!
     }
 
-    const finalVx = baseVx + (Math.random() * 2 - 1) * noiseRange;
-    const finalVy = baseVy + (Math.random() * 2 - 1) * noiseRange;
+    const finalVx = baseVx + (Math.random() * 2 - 1) * noiseRange * 6;
+    const finalVy = baseVy + (Math.random() * 2 - 1) * noiseRange * 6;
 
-    // Speed vector scaling match
-    const impulseSpeedX = finalVx * 0.165;
-    const impulseSpeedY = finalVy * 0.165;
+    // Speed vector scaling match - Eliminate the 0.165 downscaling error that dropped shots at feet!
+    const impulseSpeedX = finalVx;
+    const impulseSpeedY = finalVy;
 
     this.time.delayedCall(400, () => {
       this.spawnAndLaunchProjectile(impulseSpeedX, impulseSpeedY, true);
@@ -2407,26 +2383,6 @@ export class GameScene extends Scene {
     for (let ry = this.enemyBaseY + 16; ry < height; ry += 32) {
       tg.lineBetween(650, ry, 1024, ry);
     }
-
-    // 5. Draw Craters (Explosion overlay cutout)
-    // Overlays deep charred circles filled with the sky's actual backdrop gradient for gorgeous 2D hollowing effect!
-    this.craters.forEach((crater) => {
-      // Charred hot impact shell
-      let shellColor = 0x212529;
-      if (this.levelData.theme === "마그마 계곡") {
-        shellColor = 0xff922b; // Fiery volcanic rim!
-      } else if (this.levelData.theme === "앤트로피 궁정" || this.levelData.theme === "대리석 전당") {
-        shellColor = 0x845ef7; // Cosmic purple burn rim!
-      }
-      
-      tg.fillStyle(shellColor, 0.95);
-      tg.fillCircle(crater.x, crater.y, crater.radius + 5);
-
-      // Blends seamlessly into backdrop sky colors
-      const skyGradientColor = this.getSkyColorAt(crater.y);
-      tg.fillStyle(skyGradientColor, 1);
-      tg.fillCircle(crater.x, crater.y, crater.radius);
-    });
   }
 
   private getSkyColorAt(y: number): number {
