@@ -314,6 +314,20 @@ export default function App() {
     };
     document.addEventListener('fullscreenchange', handleFullscreenChange);
 
+    // Try to programmatically lock screen to landscape if supported
+    const lockLandscape = () => {
+      try {
+        const screenAny = window.screen as any;
+        if (screenAny && screenAny.orientation && screenAny.orientation.lock) {
+          screenAny.orientation.lock("landscape").catch(() => {});
+        } else if (screenAny.lockOrientation) {
+          screenAny.lockOrientation("landscape");
+        }
+      } catch (e) {}
+    };
+
+    lockLandscape();
+
     // Prompt-fee immediate run
     document.documentElement.requestFullscreen().catch(() => {
       // Quietly ignore since standard browsers sometimes block prompt-less startup transitions
@@ -321,6 +335,7 @@ export default function App() {
 
     // Extremely robust click/touch listener: triggers immediate fullscreen on first interaction
     const triggerFullscreenOnFirstInteract = () => {
+      lockLandscape();
       if (!document.fullscreenElement) {
         document.documentElement.requestFullscreen().catch(() => {});
       }

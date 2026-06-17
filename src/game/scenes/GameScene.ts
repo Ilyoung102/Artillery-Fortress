@@ -749,10 +749,7 @@ export class GameScene extends Scene {
         const by = block.y;
         if (bx > 410 && bx < 660 && by > 550) {
           this.spawnSplashEffects(bx, by);
-          this.blockHealthMap.delete(block.body);
-          this.blockBodies.splice(i, 1);
-          block.destroy();
-          this.matter.world.remove(block.body);
+          this.destroyBlock(block.body);
         }
       }
     }
@@ -1476,7 +1473,7 @@ export class GameScene extends Scene {
     // Clear and remove physical body
     this.spawnDebris(posX, posY, record.material, 12);
     this.blockHealthMap.delete(b);
-    this.blockBodies = this.blockBodies.filter(item => item.body !== b);
+    this.blockBodies = this.blockBodies.filter(item => item && item.body && item.body !== b);
 
     if (b.gameObject) {
       b.gameObject.destroy();
@@ -1495,7 +1492,7 @@ export class GameScene extends Scene {
 
     this.spawnDebris(posX, posY, 'tnt', 16);
     this.enemyHealthMap.delete(b);
-    this.enemyBodies = this.enemyBodies.filter(item => item.body !== b);
+    this.enemyBodies = this.enemyBodies.filter(item => item && item.body && item.body !== b);
 
     if (b.gameObject) {
       b.gameObject.destroy();

@@ -47,8 +47,8 @@ export class PreloadScene extends Scene {
 
   create() {
     this.createProceduralTextures();
-    // After creating procedural assets, skip the main menu/guides and start GameScene directly with Level 1combat
-    this.scene.start("GameScene", { levelId: 1 });
+    // After creating procedural assets, start the main MenuScene
+    this.scene.start("MenuScene");
   }
 
   private createProceduralTextures() {
