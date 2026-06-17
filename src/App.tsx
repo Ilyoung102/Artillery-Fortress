@@ -78,6 +78,13 @@ export default function App() {
     // Prevent double initialization in React safe mode
     if (!gameRef.current) {
       const parentId = 'phaser-game-container';
+      
+      // Clean up any remaining canvas elements from previous renders
+      const container = document.getElementById(parentId);
+      if (container) {
+        container.innerHTML = '';
+      }
+
       const gameInstance = createGame(parentId);
       gameRef.current = gameInstance;
 
@@ -190,6 +197,21 @@ export default function App() {
   const getPhaserCoords = (clientX: number, clientY: number) => {
     if (!touchZoneRef.current) return { x: 0, y: 0 };
     const rect = touchZoneRef.current.getBoundingClientRect();
+    
+    if (isPortrait) {
+      // 90도 회전된 환경의 기하학적 보정 공식을 적용하여 수동 조준 타격 정밀 제어 완벽 연결
+      const relativeX = clientY - rect.top;
+      const relativeY = (rect.left + rect.width) - clientX;
+      
+      const scaleX = 1024 / (rect.height || 1);
+      const scaleY = 600 / (rect.width || 1);
+      
+      return {
+        x: Math.max(0, Math.min(1024, relativeX * scaleX)),
+        y: Math.max(0, Math.min(600, relativeY * scaleY))
+      };
+    }
+
     const relativeX = clientX - rect.left;
     const relativeY = clientY - rect.top;
     
@@ -322,8 +344,20 @@ export default function App() {
   };
 
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const [isPortrait, setIsPortrait] = useState<boolean>(false);
+  const [dismissPortraitGuide, setDismissPortraitGuide] = useState<boolean>(false);
 
   useEffect(() => {
+    const handleResize = () => {
+      setIsPortrait(window.innerHeight > window.innerWidth);
+    };
+
+    // Run dynamic aspect ratio check immediately
+    handleResize();
+
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+
     const handleFullscreenChange = () => {
       setIsFullscreen(!!document.fullscreenElement);
     };
@@ -343,11 +377,6 @@ export default function App() {
 
     lockLandscape();
 
-    // Prompt-fee immediate run
-    document.documentElement.requestFullscreen().catch(() => {
-      // Quietly ignore since standard browsers sometimes block prompt-less startup transitions
-    });
-
     // Extremely robust click/touch listener: triggers immediate fullscreen on first interaction
     const triggerFullscreenOnFirstInteract = () => {
       lockLandscape();
@@ -363,6 +392,8 @@ export default function App() {
     window.addEventListener('touchstart', triggerFullscreenOnFirstInteract, true);
 
     return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
       window.removeEventListener('click', triggerFullscreenOnFirstInteract, true);
       window.removeEventListener('touchstart', triggerFullscreenOnFirstInteract, true);
@@ -380,9 +411,25 @@ export default function App() {
     }
   };
 
+  const styleOverride: React.CSSProperties = isPortrait ? {
+    position: 'fixed',
+    top: '50%',
+    left: '50%',
+    width: '100vh',
+    height: '100vw',
+    transform: 'translate(-50%, -50%) rotate(90deg)',
+    transformOrigin: 'center center',
+    maxWidth: 'none',
+    maxHeight: 'none',
+  } : {};
+
   return (
-    <div id="artillery-app-root" className="h-screen w-screen max-w-full max-h-full overflow-hidden bg-gradient-to-b from-[#111827] via-[#0f172a] to-[#020617] flex flex-col items-center justify-center font-sans antialiased select-none text-slate-100 p-1 sm:p-3 relative">
-      
+    <div 
+      id="artillery-app-root" 
+      style={styleOverride}
+      className="h-screen w-screen max-w-full max-h-full overflow-hidden bg-gradient-to-b from-[#111827] via-[#0f172a] to-[#020617] flex flex-col items-center justify-center font-sans antialiased select-none text-slate-100 p-1 sm:p-3 relative"
+    >
+
       {/* Sleek Minimal Header - UI is completely focused inside the viewport element once you enter active stage */}
       {!hudState && (
         <header className="w-full max-w-[1024px] px-5 py-2.5 flex items-center justify-between border border-white/10 bg-slate-900/40 backdrop-blur-md z-10 rounded-2xl shadow-lg mb-2 animate-fade-in shrink-0">
