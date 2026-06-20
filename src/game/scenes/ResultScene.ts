@@ -145,15 +145,15 @@ export class ResultScene extends Scene {
         color: '#ffffff'
       }).setOrigin(0.5);
 
-      const w = 180;
-      const h = 42;
+      const w = 200;
+      const h = 48;
 
       const redraw = (hover: boolean) => {
         g.clear();
         g.fillStyle(hover ? color - 0x111111 : color, 1);
-        g.fillRoundedRect(x - w / 2, y - h / 2, w, h, 6);
-        g.lineStyle(2, 0xffffff, 0.4);
-        g.strokeRoundedRect(x - w / 2, y - h / 2, w, h, 6);
+        g.fillRoundedRect(x - w / 2, y - h / 2, w, h, 8);
+        g.lineStyle(2, 0xffffff, 0.45);
+        g.strokeRoundedRect(x - w / 2, y - h / 2, w, h, 8);
       };
 
       redraw(false);
@@ -161,10 +161,17 @@ export class ResultScene extends Scene {
       const zone = this.add.zone(x, y, w, h).setInteractive({ useHandCursor: true });
       zone.on('pointerover', () => redraw(true));
       zone.on('pointerout', () => redraw(false));
-      zone.on('pointerdown', () => {
+      
+      let triggered = false;
+      const triggerAction = () => {
+        if (triggered) return;
+        triggered = true;
         this.playToneSequence([440], [0.05]);
         callback();
-      });
+      };
+      
+      zone.on('pointerdown', triggerAction);
+      zone.on('pointerup', triggerAction);
     };
 
     // Row coordinates for grid row layout
@@ -186,6 +193,33 @@ export class ResultScene extends Scene {
       });
       createBtn(width / 2 + 110, 435, '스테이지 선택', 0x10b981, () => {
         this.scene.start("LevelSelectScene");
+      });
+    }
+
+    // Interactive Keyboard Shortcuts for premium accessibility!
+    if (this.input.keyboard) {
+      this.input.keyboard.on('keydown-R', () => {
+        this.scene.start("GameScene", { levelId: this.payload.levelId });
+      });
+      this.input.keyboard.on('keydown-S', () => {
+        this.scene.start("LevelSelectScene");
+      });
+      this.input.keyboard.on('keydown-ESC', () => {
+        this.scene.start("LevelSelectScene");
+      });
+      this.input.keyboard.on('keydown-ENTER', () => {
+        if (this.payload.status === 'win' && this.payload.levelId < LEVELS.length) {
+          this.scene.start("GameScene", { levelId: this.payload.levelId + 1 });
+        } else {
+          this.scene.start("GameScene", { levelId: this.payload.levelId });
+        }
+      });
+      this.input.keyboard.on('keydown-SPACE', () => {
+        if (this.payload.status === 'win' && this.payload.levelId < LEVELS.length) {
+          this.scene.start("GameScene", { levelId: this.payload.levelId + 1 });
+        } else {
+          this.scene.start("GameScene", { levelId: this.payload.levelId });
+        }
       });
     }
   }
@@ -217,7 +251,7 @@ export class ResultScene extends Scene {
 
   private playToneSequence(freqs: number[], durations: number[] = []) {
     const state = SaveSystem.load();
-    if (!state.settings.soundOn) return;
+    if (!state.settings || !state.settings.soundOn) return;
 
     try {
       const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -226,21 +260,25 @@ export class ResultScene extends Scene {
       freqs.forEach((freq, idx) => {
         const dur = durations[idx] || 0.15;
         this.time.delayedCall(delay * 1000, () => {
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.type = 'sine';
-          osc.frequency.value = freq;
-          gain.gain.setValueAtTime(0.1, ctx.currentTime);
-          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
-          osc.connect(gain);
-          gain.connect(ctx.destination);
-          osc.start();
-          osc.stop(ctx.currentTime + dur);
+          try {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.value = freq;
+            gain.gain.setValueAtTime(0.1, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start();
+            osc.stop(ctx.currentTime + dur);
+          } catch (e) {
+            console.warn("AudioContext tone trigger failed or blocked:", e);
+          }
         });
         delay += dur;
       });
     } catch (e) {
-      // Audio context might be blocked
+      console.warn("AudioContext setup failed:", e);
     }
   }
 }
