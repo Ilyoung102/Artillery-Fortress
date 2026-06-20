@@ -29,6 +29,14 @@ export class ResultScene extends Scene {
 
   create() {
     this.game.events.emit("scene_change", "ResultScene");
+    this.game.events.emit("show_result", {
+      levelId: this.payload.levelId,
+      status: this.payload.status,
+      score: this.payload.score,
+      stars: this.payload.stars,
+      turnsUsed: this.payload.turnsUsed
+    });
+    let isTransitioning = false;
 
     const width = this.cameras.main.width;
     const height = this.cameras.main.height;
@@ -140,58 +148,76 @@ export class ResultScene extends Scene {
       const g = this.add.graphics();
       const txt = this.add.text(x, y, text, {
         fontFamily: 'system-ui, sans-serif',
-        fontSize: '16px',
+        fontSize: '18px',
         fontStyle: 'bold',
         color: '#ffffff'
       }).setOrigin(0.5);
 
-      const w = 200;
-      const h = 48;
+      const w = 210; // Slightly widened for aesthetic proportion
+      const h = 63; // 30% increase from 48px (48 * 1.3 = 62.4 -> 63px)
 
-      const redraw = (hover: boolean) => {
+      const redraw = (state: 'normal' | 'hover' | 'click') => {
         g.clear();
-        g.fillStyle(hover ? color - 0x111111 : color, 1);
-        g.fillRoundedRect(x - w / 2, y - h / 2, w, h, 8);
-        g.lineStyle(2, 0xffffff, 0.45);
-        g.strokeRoundedRect(x - w / 2, y - h / 2, w, h, 8);
+        let bgCol = color;
+        if (state === 'hover') bgCol = color + 0x0c0c0c;
+        if (state === 'click') bgCol = color - 0x111111;
+        
+        g.fillStyle(bgCol, 1);
+        g.fillRoundedRect(x - w / 2, y - h / 2, w, h, 10);
+        g.lineStyle(2, 0xffffff, state === 'hover' ? 0.6 : 0.4);
+        g.strokeRoundedRect(x - w / 2, y - h / 2, w, h, 10);
       };
 
-      redraw(false);
+      redraw('normal');
 
       const zone = this.add.zone(x, y, w, h).setInteractive({ useHandCursor: true });
-      zone.on('pointerover', () => redraw(true));
-      zone.on('pointerout', () => redraw(false));
       
-      let triggered = false;
-      const triggerAction = () => {
-        if (triggered) return;
-        triggered = true;
+      zone.on('pointerover', () => {
+        if (isTransitioning) return;
+        redraw('hover');
+      });
+      
+      zone.on('pointerout', () => {
+        if (isTransitioning) return;
+        txt.y = y;
+        txt.setScale(1.0);
+        redraw('normal');
+      });
+      
+      zone.on('pointerdown', () => {
+        if (isTransitioning) return;
+        isTransitioning = true;
+        
+        redraw('click');
+        txt.y = y + 3; // Shift down for physical press effect!
+        txt.setScale(0.92); // Visually scale down on active touch press
         this.playToneSequence([440], [0.05]);
-        callback();
-      };
-      
-      zone.on('pointerdown', triggerAction);
-      zone.on('pointerup', triggerAction);
+        
+        this.time.delayedCall(120, () => {
+          callback();
+        });
+      });
     };
 
     // Row coordinates for grid row layout
     if (this.payload.status === 'win' && this.payload.levelId < LEVELS.length) {
       // 3 buttons: Next, Replay, Map list
-      createBtn(width / 2, 405, '다음 스테이지 ▶', 0x3b82f6, () => {
+      // Spanning Y positions beautifully (390 vs 470) to fully separate the increased h=63 height
+      createBtn(width / 2, 390, '다음 스테이지 ▶', 0x3b82f6, () => {
         this.scene.start("GameScene", { levelId: this.payload.levelId + 1 });
       });
-      createBtn(width / 2 - 110, 465, '스테이지 다시 하기', 0x6b7280, () => {
+      createBtn(width / 2 - 115, 470, '다시 도전하기', 0x6b7280, () => {
         this.scene.start("GameScene", { levelId: this.payload.levelId });
       });
-      createBtn(width / 2 + 110, 465, '선택 창으로', 0x10b981, () => {
+      createBtn(width / 2 + 115, 470, '스테이지 선택', 0x10b981, () => {
         this.scene.start("LevelSelectScene");
       });
     } else {
       // 2 buttons: Replay, Map list
-      createBtn(width / 2 - 110, 435, '다시 도전 하기', 0x3b82f6, () => {
+      createBtn(width / 2 - 115, 440, '다시 도전하기', 0x3b82f6, () => {
         this.scene.start("GameScene", { levelId: this.payload.levelId });
       });
-      createBtn(width / 2 + 110, 435, '스테이지 선택', 0x10b981, () => {
+      createBtn(width / 2 + 115, 440, '스테이지 선택', 0x10b981, () => {
         this.scene.start("LevelSelectScene");
       });
     }
@@ -199,27 +225,47 @@ export class ResultScene extends Scene {
     // Interactive Keyboard Shortcuts for premium accessibility!
     if (this.input.keyboard) {
       this.input.keyboard.on('keydown-R', () => {
-        this.scene.start("GameScene", { levelId: this.payload.levelId });
+        if (isTransitioning) return;
+        isTransitioning = true;
+        this.time.delayedCall(120, () => {
+          this.scene.start("GameScene", { levelId: this.payload.levelId });
+        });
       });
       this.input.keyboard.on('keydown-S', () => {
-        this.scene.start("LevelSelectScene");
+        if (isTransitioning) return;
+        isTransitioning = true;
+        this.time.delayedCall(120, () => {
+          this.scene.start("LevelSelectScene");
+        });
       });
       this.input.keyboard.on('keydown-ESC', () => {
-        this.scene.start("LevelSelectScene");
+        if (isTransitioning) return;
+        isTransitioning = true;
+        this.time.delayedCall(120, () => {
+          this.scene.start("LevelSelectScene");
+        });
       });
       this.input.keyboard.on('keydown-ENTER', () => {
-        if (this.payload.status === 'win' && this.payload.levelId < LEVELS.length) {
-          this.scene.start("GameScene", { levelId: this.payload.levelId + 1 });
-        } else {
-          this.scene.start("GameScene", { levelId: this.payload.levelId });
-        }
+        if (isTransitioning) return;
+        isTransitioning = true;
+        this.time.delayedCall(120, () => {
+          if (this.payload.status === 'win' && this.payload.levelId < LEVELS.length) {
+            this.scene.start("GameScene", { levelId: this.payload.levelId + 1 });
+          } else {
+            this.scene.start("GameScene", { levelId: this.payload.levelId });
+          }
+        });
       });
       this.input.keyboard.on('keydown-SPACE', () => {
-        if (this.payload.status === 'win' && this.payload.levelId < LEVELS.length) {
-          this.scene.start("GameScene", { levelId: this.payload.levelId + 1 });
-        } else {
-          this.scene.start("GameScene", { levelId: this.payload.levelId });
-        }
+        if (isTransitioning) return;
+        isTransitioning = true;
+        this.time.delayedCall(120, () => {
+          if (this.payload.status === 'win' && this.payload.levelId < LEVELS.length) {
+            this.scene.start("GameScene", { levelId: this.payload.levelId + 1 });
+          } else {
+            this.scene.start("GameScene", { levelId: this.payload.levelId });
+          }
+        });
       });
     }
   }

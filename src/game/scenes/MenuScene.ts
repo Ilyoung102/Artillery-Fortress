@@ -162,9 +162,14 @@ export class MenuScene extends Scene {
         const zone = this.add.zone(x, y, itemWidth, itemHeight).setInteractive({ useHandCursor: true });
         zone.on('pointerover', () => drawCardHover());
         zone.on('pointerout', () => drawCardNormal());
+        let cardTransitioned = false;
         zone.on('pointerdown', () => {
+          if (cardTransitioned) return;
+          cardTransitioned = true;
           this.playBeep(520, 0.08);
-          this.scene.start("GameScene", { levelId: level.id });
+          this.time.delayedCall(30, () => {
+            this.scene.start("GameScene", { levelId: level.id });
+          });
         });
       } else {
         // 잠겨 있는 상태 표시물
@@ -221,13 +226,15 @@ export class MenuScene extends Scene {
       const zone = this.add.zone(x, y, widthBtn, heightBtn).setInteractive({ useHandCursor: true });
       zone.on('pointerover', () => drawHover());
       zone.on('pointerout', () => drawNormal());
+      let btnTransitioned = false;
       zone.on('pointerdown', () => {
+        if (btnTransitioned) return;
+        btnTransitioned = true;
         drawClick();
         this.playBeep(440, 0.05);
-      });
-      zone.on('pointerup', () => {
-        drawHover();
-        callback();
+        this.time.delayedCall(30, () => {
+          callback();
+        });
       });
 
       return { text, btnBg, zone };

@@ -55,9 +55,14 @@ export class LevelSelectScene extends Scene {
       backBtnBg.fillStyle(0x495057, 1);
       backBtnBg.fillRoundedRect(40, 30, 160, 40, 6);
     });
+    let backTransitioned = false;
     backZone.on('pointerdown', () => {
+      if (backTransitioned) return;
+      backTransitioned = true;
       this.playBeep(330, 0.05);
-      this.scene.start("MenuScene");
+      this.time.delayedCall(30, () => {
+        this.scene.start("MenuScene");
+      });
     });
 
     // 24 Levels layout calculation (e.g., 8 columns x 3 rows grid to fit within 1024x600 beautifully)
@@ -146,9 +151,14 @@ export class LevelSelectScene extends Scene {
           boxGraphics.strokeRoundedRect(x - itemWidth / 2, y - itemHeight / 2, itemWidth, itemHeight, 8);
         });
 
+        let isTransitioned = false;
         zone.on('pointerdown', () => {
+          if (isTransitioned) return;
+          isTransitioned = true;
           this.playBeep(520, 0.08);
-          this.scene.start("GameScene", { levelId: level.id });
+          this.time.delayedCall(30, () => {
+            this.scene.start("GameScene", { levelId: level.id });
+          });
         });
 
       } else {

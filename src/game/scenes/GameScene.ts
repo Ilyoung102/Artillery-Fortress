@@ -883,8 +883,8 @@ export class GameScene extends Scene {
       }
     }
 
-    // Monitoring active player falling below stage bottom
-    if (this.activePlayerUnit && this.activePlayerUnit.active) {
+    // Monitoring active player falling below stage bottom (except when stretching the slingshot/aiming!)
+    if (this.activePlayerUnit && this.activePlayerUnit.active && !this.isAiming) {
       if (this.activePlayerUnit.y > 570) {
         const px = this.activePlayerUnit.x;
         const py = this.activePlayerUnit.y;
@@ -1240,7 +1240,8 @@ export class GameScene extends Scene {
 
       // Physically shift character visual slightly to mimic slingshot rubber stretching!
       if (this.activePlayerUnit && typeof this.activePlayerUnit.setPosition === 'function') {
-        this.activePlayerUnit.setPosition(startX - dx, startY - dy);
+        const visualY = Phaser.Math.Clamp(startY - dy, 50, 545);
+        this.activePlayerUnit.setPosition(startX - dx, visualY);
       }
 
       // Redraw dots
@@ -2116,7 +2117,7 @@ export class GameScene extends Scene {
   }
 
   private handleShrapnelImpact(sBody: any, otherBody: any) {
-    if (!sBody || !sBody.gameObject) return;
+    if (!sBody || !sBody.position || !sBody.gameObject) return;
 
     // Avoid self double collision
     sBody.label = 'inactive';

@@ -58,6 +58,9 @@ export default function App() {
   // HUD state loaded dynamically from active Phaser GameScene
   const [hudState, setHudState] = useState<HudData | null>(null);
 
+  // Result overlay state loaded from ResultScene payload
+  const [resultPayload, setResultPayload] = useState<any | null>(null);
+
   // Manual Artillery Cannon sliders state (alternative mode)
   const [cannonAngle, setCannonAngle] = useState<number>(45);
   const [cannonPower, setCannonPower] = useState<number>(55);
@@ -103,6 +106,13 @@ export default function App() {
         if (sceneKey !== 'GameScene') {
           setHudState(null);
         }
+        if (sceneKey !== 'ResultScene') {
+          setResultPayload(null);
+        }
+      });
+
+      gameInstance.events.on('show_result', (payload: any) => {
+        setResultPayload(payload);
       });
 
       gameInstance.events.on('open_help', () => {
@@ -400,6 +410,33 @@ export default function App() {
     }
   };
 
+  const handleReplayLevel = (levelId: number) => {
+    playBeep(520, 0.08);
+    if (gameRef.current) {
+      gameRef.current.scene.stop("ResultScene");
+      gameRef.current.scene.start("GameScene", { levelId });
+      setResultPayload(null);
+    }
+  };
+
+  const handleNextLevel = (levelId: number) => {
+    playBeep(520, 0.08);
+    if (gameRef.current) {
+      gameRef.current.scene.stop("ResultScene");
+      gameRef.current.scene.start("GameScene", { levelId: levelId + 1 });
+      setResultPayload(null);
+    }
+  };
+
+  const handleGoToLevelSelect = () => {
+    playBeep(520, 0.08);
+    if (gameRef.current) {
+      gameRef.current.scene.stop("ResultScene");
+      gameRef.current.scene.start("LevelSelectScene");
+      setResultPayload(null);
+    }
+  };
+
   const handleToggleSound = () => {
     const nextVal = !soundOn;
     SaveSystem.setSoundOn(nextVal);
@@ -643,9 +680,89 @@ export default function App() {
               </div>
             );
           })()}
-          
+
+          {/* 🏆 Robust React Game Result Overlay */}
+          {activeSceneKey === 'ResultScene' && resultPayload && (() => {
+            const isWin = resultPayload.status === 'win';
+            const lvl = LEVELS.find(l => l.id === resultPayload.levelId);
+            const lvlName = lvl ? (lvl.name.split(':')[1] || lvl.name) : `스테이지 ${resultPayload.levelId}`;
+            
+            return (
+              <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4 text-center select-none animate-fade-in pointer-events-auto">
+                <div className={`w-full max-w-sm bg-white border-4 ${isWin ? 'border-emerald-600 shadow-[0_0_25px_rgba(16,185,129,0.4)]' : 'border-rose-600 shadow-[0_0_25px_rgba(225,29,72,0.4)]'} rounded-3xl p-6 relative flex flex-col items-center animate-scale-up`}>
+                  
+                  {/* Result Title */}
+                  <h2 className={`text-xl sm:text-2xl font-black uppercase tracking-tight mb-2 ${isWin ? 'text-emerald-700' : 'text-rose-700'}`}>
+                    {isWin ? '★ 작전 성공 (VICTORY) ★' : '작전 실패 (DEFEAT)'}
+                  </h2>
+                  
+                  {/* Decorative Icon */}
+                  <div className="text-4xl mb-3 animate-bounce">
+                    {isWin ? '🏆' : '💀'}
+                  </div>
+
+                  {/* Stars Panel if Win */}
+                  {isWin && (
+                    <div className="flex gap-2 mb-3">
+                      {[0, 1, 2].map((s) => (
+                        <span 
+                          key={s} 
+                          className="text-2xl transition-transform duration-300 scale-110"
+                          style={{
+                            color: s < resultPayload.stars ? '#F59E0B' : '#E5E7EB',
+                            textShadow: s < resultPayload.stars ? '0 0 8px rgba(245, 158, 11, 0.6)' : 'none'
+                          }}
+                        >
+                          ★
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Statistics */}
+                  <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3.5 w-full mb-4 font-semibold text-slate-700">
+                    <p className="text-xs text-slate-600 mb-0.5">{lvlName}</p>
+                    <p className="text-sm text-slate-800 font-bold mb-0.5">
+                      획득 점수: <span className="text-sky-600">{resultPayload.score.toLocaleString()}</span> 점
+                    </p>
+                    <p className="text-[11px] text-slate-500">
+                      투입 턴 점유율: {resultPayload.turnsUsed} 턴 째 완료
+                    </p>
+                  </div>
+
+                  {/* Gigantic tactile touch actions */}
+                  <div className="flex flex-col gap-2 w-full">
+                    {isWin && resultPayload.levelId < LEVELS.length && (
+                      <button
+                        onClick={() => handleNextLevel(resultPayload.levelId)}
+                        className="w-full py-2.5 px-6 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer active:scale-95 transition-all shadow-md animate-pulse border-b-4 border-blue-800 hover:border-blue-700"
+                      >
+                        다음 스테이지 ▶
+                      </button>
+                    )}
+                    
+                    <button
+                      onClick={() => handleReplayLevel(resultPayload.levelId)}
+                      className="w-full py-2.5 px-6 bg-slate-600 hover:bg-slate-500 text-white font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer active:scale-95 transition-all shadow-md border-b-4 border-slate-850 hover:border-slate-650"
+                    >
+                      다시 도전하기 🔄
+                    </button>
+                    
+                    <button
+                      onClick={handleGoToLevelSelect}
+                      className="w-full py-2 px-6 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer active:scale-95 transition-all shadow-sm border-b-4 border-emerald-800 hover:border-emerald-700"
+                    >
+                      스테이지 선택 🗺️
+                    </button>
+                  </div>
+
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Slingshot Drag Zone Layer */}
-          {hudState && hudState.isPlayerTurn && !hudState.activeProjectileActive && (
+          {activeSceneKey === 'GameScene' && hudState && hudState.isPlayerTurn && !hudState.activeProjectileActive && (
             <div 
               ref={touchZoneRef}
               className="absolute inset-0 z-10 cursor-crosshair sm:pointer-events-auto animate-fade-in"
