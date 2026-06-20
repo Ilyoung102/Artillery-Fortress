@@ -95,4 +95,31 @@ html, body {
   background-color: #020617 !important;
 }
 
+/* Custom minimized angle and power range input selection circles/thumbs */
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 11px !important;    /* Proportional reduced size */
+  height: 11px !important;   /* Proportional reduced size */
+  border-radius: 9999px !important;
+  background: #f59e0b !important; /* Vivid Amber yellow */
+  cursor: pointer;
+  box-shadow: 0 0 4px rgba(245, 158, 11, 0.9) !important;
+  transition: transform 0.1s ease;
+}
+
+input[type="range"]::-webkit-slider-thumb:active {
+  transform: scale(1.2);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 11px !important;
+  height: 11px !important;
+  border: 0 !important;
+  border-radius: 9999px !important;
+  background: #f59e0b !important;
+  cursor: pointer;
+  box-shadow: 0 0 4px rgba(245, 158, 11, 0.9) !important;
+}
+
 

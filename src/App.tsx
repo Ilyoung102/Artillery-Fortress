@@ -689,28 +689,28 @@ export default function App() {
             
             return (
               <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4 text-center select-none animate-fade-in pointer-events-auto">
-                <div className={`w-full max-w-sm bg-white border-4 ${isWin ? 'border-emerald-600 shadow-[0_0_25px_rgba(16,185,129,0.4)]' : 'border-rose-600 shadow-[0_0_25px_rgba(225,29,72,0.4)]'} rounded-3xl p-6 relative flex flex-col items-center animate-scale-up`}>
+                <div className={`w-full max-w-[270px] bg-white border-4 ${isWin ? 'border-emerald-600 shadow-[0_0_20px_rgba(16,185,129,0.4)]' : 'border-rose-600 shadow-[0_0_20px_rgba(225,29,72,0.4)]'} rounded-2xl p-4 sm:p-5 relative flex flex-col items-center animate-scale-up`}>
                   
                   {/* Result Title */}
-                  <h2 className={`text-xl sm:text-2xl font-black uppercase tracking-tight mb-2 ${isWin ? 'text-emerald-700' : 'text-rose-700'}`}>
-                    {isWin ? '★ 작전 성공 (VICTORY) ★' : '작전 실패 (DEFEAT)'}
+                  <h2 className={`text-base sm:text-lg font-black uppercase tracking-tight mb-1 ${isWin ? 'text-emerald-700' : 'text-rose-700'}`}>
+                    {isWin ? '★ 작전 성공 ★' : '작전 실패 (DEFEAT)'}
                   </h2>
                   
                   {/* Decorative Icon */}
-                  <div className="text-4xl mb-3 animate-bounce">
+                  <div className="text-2xl mb-1.5 animate-bounce">
                     {isWin ? '🏆' : '💀'}
                   </div>
 
                   {/* Stars Panel if Win */}
                   {isWin && (
-                    <div className="flex gap-2 mb-3">
+                    <div className="flex gap-1.5 mb-1.5">
                       {[0, 1, 2].map((s) => (
                         <span 
                           key={s} 
-                          className="text-2xl transition-transform duration-300 scale-110"
+                          className="text-lg transition-transform duration-300 scale-110"
                           style={{
                             color: s < resultPayload.stars ? '#F59E0B' : '#E5E7EB',
-                            textShadow: s < resultPayload.stars ? '0 0 8px rgba(245, 158, 11, 0.6)' : 'none'
+                            textShadow: s < resultPayload.stars ? '0 0 6px rgba(245, 158, 11, 0.5)' : 'none'
                           }}
                         >
                           ★
@@ -720,22 +720,22 @@ export default function App() {
                   )}
 
                   {/* Statistics */}
-                  <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3.5 w-full mb-4 font-semibold text-slate-700">
-                    <p className="text-xs text-slate-600 mb-0.5">{lvlName}</p>
-                    <p className="text-sm text-slate-800 font-bold mb-0.5">
+                  <div className="bg-slate-50 border border-slate-100 rounded-xl p-2.5 w-full mb-2.5 font-semibold text-slate-700">
+                    <p className="text-[10px] text-slate-600 mb-0.5">{lvlName}</p>
+                    <p className="text-xs text-slate-800 font-bold mb-0.5">
                       획득 점수: <span className="text-sky-600">{resultPayload.score.toLocaleString()}</span> 점
                     </p>
-                    <p className="text-[11px] text-slate-500">
+                    <p className="text-[9.5px] text-slate-500">
                       투입 턴 점유율: {resultPayload.turnsUsed} 턴 째 완료
                     </p>
                   </div>
 
                   {/* Gigantic tactile touch actions */}
-                  <div className="flex flex-col gap-2 w-full">
+                  <div className="flex flex-col gap-1.5 w-full">
                     {isWin && resultPayload.levelId < LEVELS.length && (
                       <button
                         onClick={() => handleNextLevel(resultPayload.levelId)}
-                        className="w-full py-2.5 px-6 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer active:scale-95 transition-all shadow-md animate-pulse border-b-4 border-blue-800 hover:border-blue-700"
+                        className="w-full py-1.5 px-6 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-[10px] uppercase tracking-wider rounded-lg cursor-pointer active:scale-95 transition-all shadow-md animate-pulse border-b-2 border-blue-800 hover:border-blue-700"
                       >
                         다음 스테이지 ▶
                       </button>
@@ -743,14 +743,14 @@ export default function App() {
                     
                     <button
                       onClick={() => handleReplayLevel(resultPayload.levelId)}
-                      className="w-full py-2.5 px-6 bg-slate-600 hover:bg-slate-500 text-white font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer active:scale-95 transition-all shadow-md border-b-4 border-slate-850 hover:border-slate-650"
+                      className="w-full py-1.5 px-6 bg-slate-600 hover:bg-slate-500 text-white font-black text-[10px] uppercase tracking-wider rounded-lg cursor-pointer active:scale-95 transition-all shadow-md border-b-2 border-slate-850 hover:border-slate-650"
                     >
                       다시 도전하기 🔄
                     </button>
                     
                     <button
                       onClick={handleGoToLevelSelect}
-                      className="w-full py-2 px-6 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer active:scale-95 transition-all shadow-sm border-b-4 border-emerald-800 hover:border-emerald-700"
+                      className="w-full py-1.5 px-6 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[10px] uppercase tracking-wider rounded-lg cursor-pointer active:scale-95 transition-all shadow-sm border-b-2 border-emerald-800 hover:border-emerald-700"
                     >
                       스테이지 선택 🗺️
                     </button>
@@ -972,12 +972,12 @@ export default function App() {
 
               {/* 5. BOTTOM RIGHT: CASSINI PRECISION INPUTS & SLIDERS */}
               <div className="absolute right-2.5 bottom-2.5 flex flex-col gap-1.5 pointer-events-auto z-20 select-none">
-                <div className="bg-black/20 border border-white/5 rounded-lg p-1 text-white font-mono flex flex-col gap-0.5 w-[110px] shadow-md">
+                <div className="bg-slate-900/95 border border-white/15 rounded-xl p-2 text-white font-mono flex flex-col gap-1 w-[126px] shadow-2xl">
                   {/* Angle slider */}
                   <div>
-                    <div className="flex items-center justify-between text-[6.5px] font-semibold">
+                    <div className="flex items-center justify-between text-[8px] font-bold tracking-tight text-slate-300">
                       <span>DEGREE</span>
-                      <span className="text-amber-300 font-bold font-mono">{cannonAngle}°</span>
+                      <span className="text-amber-400 font-black font-mono">{cannonAngle}°</span>
                     </div>
                     <input 
                       type="range"
@@ -985,15 +985,15 @@ export default function App() {
                       max="170"
                       value={cannonAngle}
                       onChange={(e) => setCannonAngle(Number(e.target.value))}
-                      className="w-full accent-amber-400 cursor-pointer h-0.5 bg-white/5 rounded appearance-none m-0 p-0"
+                      className="w-full accent-amber-400 cursor-pointer h-0.5 bg-white/10 rounded appearance-none m-0 p-0 block mt-1"
                     />
                   </div>
 
                   {/* Power slider */}
                   <div>
-                    <div className="flex items-center justify-between text-[6.5px] font-semibold mt-0.5">
+                    <div className="flex items-center justify-between text-[8px] font-bold tracking-tight text-slate-300 mt-1">
                       <span>POWER</span>
-                      <span className="text-amber-300 font-bold font-mono">{cannonPower}%</span>
+                      <span className="text-amber-400 font-black font-mono">{cannonPower}%</span>
                     </div>
                     <input 
                       type="range"
@@ -1001,20 +1001,18 @@ export default function App() {
                       max="100"
                       value={cannonPower}
                       onChange={(e) => setCannonPower(Number(e.target.value))}
-                      className="w-full accent-amber-400 cursor-pointer h-0.5 bg-white/5 rounded appearance-none m-0 p-0"
+                      className="w-full accent-amber-400 cursor-pointer h-0.5 bg-white/10 rounded appearance-none m-0 p-0 block mt-1"
                     />
                   </div>
 
-                  {/* Action Fire button */}
+                  {/* Action Fire button - Significantly enlarged, high-contrast, glowing gradient style */}
                   <button
                     disabled={!hudState.isPlayerTurn || hudState.activeProjectileActive}
                     onClick={(e) => { e.stopPropagation(); handleFireCannon(); }}
-                    className="w-full mt-0.5 py-0.5 bg-rose-600/90 hover:bg-rose-700/90 border border-rose-500/20 text-white rounded font-bold transition-all text-center flex items-center justify-center disabled:opacity-30 cursor-pointer active:scale-[0.98]"
+                    className="w-full mt-2 py-1.5 bg-gradient-to-r from-red-600 to-rose-600 border border-red-500/20 text-white rounded-lg font-black transition-all text-center flex items-center justify-center disabled:opacity-35 cursor-pointer hover:from-red-500 hover:to-rose-500 active:scale-[0.95] shadow-lg shadow-red-500/10 text-[9px] hover:shadow-red-500/20"
                     title="Artillery Shot [SPACE]"
                   >
-                    <span className="text-[6.5px] font-black uppercase tracking-wide leading-none">
-                      {!hudState.isPlayerTurn ? 'WAIT' : hudState.activeProjectileActive ? 'TRACK' : 'CANNON 🎯'}
-                    </span>
+                    {!hudState.isPlayerTurn ? 'WAIT ⏳' : hudState.activeProjectileActive ? 'TRACK 🛰️' : 'FIRE CANNON 🎯'}
                   </button>
                 </div>
               </div>

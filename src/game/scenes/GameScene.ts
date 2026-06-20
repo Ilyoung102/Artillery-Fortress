@@ -57,15 +57,16 @@ export class GameScene extends Scene {
   private isGameEnded: boolean = false;
   private isMidAirActionSpent: boolean = false;
   private shieldUsesLeft: number = 3;
+  private enemiesLeftToShoot: any[] = []; // Sequential tracking for multiple enemy firing turns
 
   // Clouds and keyboard cursors for tactical movement
   private bgClouds: { graphics: Phaser.GameObjects.Graphics; speed: number }[] = [];
   private cursors: any;
   private wasd: any;
 
-  // Real Player Health tracker
-  private playerMaxHp: number = 600;
-  private playerHp: number = 600;
+  // Real Player Health tracker (More than doubled for robust, satisfying fortress durability!)
+  private playerMaxHp: number = 1300;
+  private playerHp: number = 1300;
   private sceneStartTime: number = 0;
 
   // Physical Debris list
@@ -107,6 +108,7 @@ export class GameScene extends Scene {
     this.isPaused = false;
     this.isGameEnded = false;
     this.shieldUsesLeft = 3;
+    this.enemiesLeftToShoot = [];
     this.blockHealthMap.clear();
     this.enemyHealthMap.clear();
     this.blockBodies = [];
@@ -115,9 +117,9 @@ export class GameScene extends Scene {
     this.craters = [];
     this.movingBackWalls = [];
 
-    // Real Player HP Reset
-    this.playerMaxHp = 600;
-    this.playerHp = 600;
+    // Real Player HP Reset (More than doubled from 600 to 1300!)
+    this.playerMaxHp = 1300;
+    this.playerHp = 1300;
     this.physicalDebrisList = [];
 
     // Make sure we stop leftover audio loops
@@ -1130,7 +1132,7 @@ export class GameScene extends Scene {
   }
 
   private spawnEnemy(data: EnemyPosition) {
-    const scaleFactor = 8;
+    const scaleFactor = 16; // Double enemy health scale factor (from 8 to 16)
     const maxHp = data.hp * scaleFactor;
     // Slime or enemy capsule
     const enemy = this.matter.add.image(data.x, data.y, 'enemy_standard', undefined, {
@@ -1504,6 +1506,10 @@ export class GameScene extends Scene {
     this.isAiming = false;
     this.trajectoryGraphics.clear();
 
+    // Dynamically retrieve trail tint based on selected weapon color
+    const wInfo = WEAPONS[(proj as any).weaponId] || WEAPONS.basic;
+    const trailColor = wInfo ? wInfo.color : 0xffffff;
+
     // Spawn visual smoke tail trail emitter behind projectile
     const particles = this.add.particles(0, 0, 'smoke_particle', {
       scale: { start: 1.0, end: 0.1 },
@@ -1511,7 +1517,8 @@ export class GameScene extends Scene {
       lifespan: 600,
       frequency: 24,
       follow: proj,
-      blendMode: 'ADD'
+      blendMode: 'ADD',
+      tint: trailColor
     });
     (proj as any).trailParticles = particles;
 
@@ -1611,8 +1618,8 @@ export class GameScene extends Scene {
       const pX = (otherBody && otherBody.position && typeof otherBody.position.x === 'number') ? otherBody.position.x : (otherBody && otherBody.gameObject ? otherBody.gameObject.x : 0);
       const pY = (otherBody && otherBody.position && typeof otherBody.position.y === 'number') ? otherBody.position.y : (otherBody && otherBody.gameObject ? otherBody.gameObject.y : 0);
 
-      // Spawn bloody green sparks
-      this.spawnDebris(pX, pY, 'tnt', 8);
+      // Spawn mighty green sparks & debris chunks!
+      this.spawnDebris(pX, pY, 'tnt', 22);
 
       this.spawnFloatingTxt(pX, pY - 25, `-${dmg} DMG`, '#ffa94d');
 
@@ -1899,11 +1906,9 @@ export class GameScene extends Scene {
     const radius = weapon.explosionRadius || 80;
     const maxDamage = weapon.damage * 1.5;
 
-    // Use a real Phaser Arc Game Object (circle) which scales from center (exX, exY) and handles alpha perfectly
-    let burstColor = 0xff761b;
-    if (weapon.specialEffect === 'gravity') {
-      burstColor = 0x7048e8;
-    } else if (weapon.specialEffect === 'giant_explode') {
+    // Use a real Phaser Arc Game Object (circle) matching the exact weapon color palette!
+    let burstColor = weapon.color || 0xff761b;
+    if (weapon.specialEffect === 'giant_explode') {
       burstColor = 0xff2a2a;
     }
     
@@ -1916,6 +1921,23 @@ export class GameScene extends Scene {
       duration: 380,
       onComplete: () => fireCircle.destroy()
     });
+
+    // Spawn a gorgeous fountain/burst of glowing gravity-bound spark particles outward!
+    const explosionParticles = this.add.particles(0, 0, 'fire_particle', {
+      x: exX,
+      y: exY,
+      speed: { min: 90, max: 270 },
+      angle: { min: 0, max: 360 },
+      scale: { start: 1.4, end: 0.1 },
+      alpha: { start: 1, end: 0 },
+      lifespan: { min: 450, max: 900 },
+      gravityY: 250,
+      tint: burstColor,
+      blendMode: 'ADD'
+    });
+    // Explode 25 particles (or 50 for the gigantic nuke!)
+    explosionParticles.explode(weapon.specialEffect === 'giant_explode' ? 55 : 25);
+    this.time.delayedCall(1100, () => explosionParticles.destroy());
 
     if (weapon.specialEffect === 'giant_explode') {
       // White hot core flash
@@ -2258,22 +2280,34 @@ export class GameScene extends Scene {
       this.isPlayerTurn = false;
       this.notifyHUD();
 
+      // Collect all enemies currently alive to schedule their retribution!
+      // If there are multiple, they will take turns firing in sequence!
+      this.enemiesLeftToShoot = [...this.enemyBodies];
+
       // Simple AI action latency delay
       this.time.delayedCall(1600, () => {
         this.executeEnemyCombatDecision();
       });
     } else {
-      // Enemy turn completed, return crown to player and consume standard turn index
-      this.currentTurnNumber++;
-      this.isPlayerTurn = true;
-      
-      // Shuffle wind direction vector
-      this.windSystem.randomize();
-      this.spawnPlayerAtStart();
-      this.notifyHUD();
+      // Check if we still have enemies left to shoot!
+      if (this.enemiesLeftToShoot && this.enemiesLeftToShoot.length > 0) {
+        // Fire again with the next enemy in sequence!
+        this.time.delayedCall(1400, () => {
+          this.executeEnemyCombatDecision();
+        });
+      } else {
+        // Enemy turn fully completed, return crown to player and consume standard turn index
+        this.currentTurnNumber++;
+        this.isPlayerTurn = true;
+        
+        // Shuffle wind direction vector
+        this.windSystem.randomize();
+        this.spawnPlayerAtStart();
+        this.notifyHUD();
 
-      if (this.currentTurnNumber > this.levelData.maxTurns) {
-        this.triggerGameResult(false);
+        if (this.currentTurnNumber > this.levelData.maxTurns) {
+          this.triggerGameResult(false);
+        }
       }
     }
   }
@@ -2287,8 +2321,25 @@ export class GameScene extends Scene {
       return;
     }
 
+    // Verify there is an active list of shooters. If not, initialize it
+    if (!this.enemiesLeftToShoot || this.enemiesLeftToShoot.length === 0) {
+      this.isPlayerTurn = true;
+      this.currentTurnNumber++;
+      this.notifyHUD();
+      return;
+    }
+
+    // Grab the next shooter from the sequence
+    const shootingEnemyBody = this.enemiesLeftToShoot.shift();
+    // Validate that the shooter is still alive (not blown up during previous explosions)
+    if (!shootingEnemyBody || !this.enemyBodies.includes(shootingEnemyBody)) {
+      // If destroyed, skip and immediately request next decision
+      this.time.delayedCall(100, () => this.executeEnemyCombatDecision());
+      return;
+    }
+
     // Informing user: floating text alert banner
-    const alertText = this.add.text(512, 100, '⚠️ 적 요새의 반격 사격! (ENEMY FIRE)', {
+    const alertText = this.add.text(512, 110, `⚠️ 적군 반격 사격 개시! (${this.enemyBodies.indexOf(shootingEnemyBody) + 1}호기)`, {
       fontFamily: 'system-ui, sans-serif',
       fontSize: '22px',
       fontStyle: 'bold',
@@ -2305,15 +2356,6 @@ export class GameScene extends Scene {
       duration: 300,
       onComplete: () => alertText.destroy()
     });
-
-    // Select randomly from alive enemies
-    const shootingEnemyBody = this.enemyBodies[0]; // Standard bottom slimes
-    if (!shootingEnemyBody) {
-      this.isPlayerTurn = true;
-      this.currentTurnNumber++;
-      this.notifyHUD();
-      return;
-    }
 
     // Precise launch coordinates matching where the projectile is actually spawned in spawnAndLaunchProjectile
     const launchStartX = shootingEnemyBody.x - 40;
