@@ -20,8 +20,8 @@ export class WindSystem {
     }
     
     // Choose a random wind value
-    // E.g. max range 20 gives a float between -20 and +20
-    const val = (Math.random() * 2 - 1) * this.maxRange;
+    // E.g. max range 20 gives a float between -20 and +20, cut down by 50% for moderate wind
+    const val = (Math.random() * 2 - 1) * this.maxRange * 0.5;
     this.strength = Math.round(val * 10) / 10; // Round to 1 decimal place
     return this.getState();
   }

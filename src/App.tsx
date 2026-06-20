@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createGame } from './game/GameRoot';
 import { Game } from 'phaser';
-import { Settings, Volume2, VolumeX, HelpCircle, X, ChevronLeft, ChevronRight, Info, Maximize } from 'lucide-react';
+import { Settings, Volume2, VolumeX, HelpCircle, X, ChevronLeft, ChevronRight, Info, Maximize, Shield } from 'lucide-react';
 import { SaveSystem } from './game/systems/SaveSystem';
 import { LEVELS } from './game/data/levels';
 
@@ -47,6 +47,7 @@ interface HudData {
   enemiesTotal: number;
   playerHp: number;
   activeProjectileActive: boolean;
+  shieldUsesLeft?: number;
 }
 
 export default function App() {
@@ -164,6 +165,15 @@ export default function App() {
       // Return game to level selection
       activeScene.scene.start('LevelSelectScene');
       setHudState(null);
+    }
+  };
+
+  // Trigger temporary dynamic block protective shield barrier (max 3 times)
+  const handleTriggerShield = () => {
+    if (!gameRef.current) return;
+    const activeScene = gameRef.current.scene.getScene('GameScene') as any;
+    if (activeScene && typeof activeScene.activateShield === 'function') {
+      activeScene.activateShield();
     }
   };
 
@@ -336,7 +346,16 @@ export default function App() {
     };
   }, [isSlingshotDragging, hudState]);
 
+  const isAndroidOrMobile = () => {
+    const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
+    const ua = userAgent.toLowerCase();
+    const isAndroid = /android/i.test(ua);
+    const isIPad = /ipad/i.test(ua) || (navigator.maxTouchPoints > 2 && /macintosh/i.test(ua));
+    return isAndroid || isIPad;
+  };
+
   const lockLandscape = () => {
+    if (!isAndroidOrMobile()) return; // Skip lock screen orientations on desktop PCs
     try {
       const screenAny = window.screen as any;
       if (screenAny && screenAny.orientation && screenAny.orientation.lock) {
@@ -368,7 +387,7 @@ export default function App() {
 
   const handleLaunchLevel = (levelId: number) => {
     lockLandscape();
-    if (!document.fullscreenElement) {
+    if (isAndroidOrMobile() && !document.fullscreenElement) {
       document.documentElement.requestFullscreen().catch(() => {});
     }
 
@@ -420,7 +439,7 @@ export default function App() {
     // Extremely robust click/touch listener: triggers immediate fullscreen on first interaction
     const triggerFullscreenOnFirstInteract = () => {
       lockLandscape();
-      if (!document.fullscreenElement) {
+      if (isAndroidOrMobile() && !document.fullscreenElement) {
         document.documentElement.requestFullscreen().catch(() => {});
       }
       // Remove to prevent multiple calls
@@ -497,7 +516,7 @@ export default function App() {
           <div id="phaser-game-container" className="w-full h-full" ref={gameParentRef}></div>
           
           {/* 🏰 Elegant React Main Menu & Level Grid Overlay */}
-          {!hudState && (() => {
+          {(activeSceneKey === 'BootScene' || activeSceneKey === 'PreloadScene' || activeSceneKey === 'MenuScene' || activeSceneKey === 'LevelSelectScene') && (() => {
             const currentSave = SaveSystem.load();
             return (
               <div className="absolute inset-0 z-20 flex flex-col items-center justify-between bg-slate-950/80 backdrop-blur-sm p-3 text-center select-none animate-fade-in">
@@ -772,23 +791,25 @@ export default function App() {
                 </button>
               </div>
 
-              {/* 4. BOTTOM RIGHT: SCI-FI WEAPONS ROW & CASSINI PRECISION INPUTS */}
-              <div className="absolute right-2.5 bottom-2.5 flex flex-col gap-1.5 pointer-events-auto z-20 select-none">
-                {/* Weapons Horizontal Ribbon Grid */}
-                <div className="flex gap-1 bg-black/35 border border-white/10 p-0.5 rounded-lg shadow-lg max-w-[210px] overflow-x-auto">
+              {/* 4. TOP RIGHT SUITE: WEAPONS ROW & PROTECTIVE SHIELD */}
+              <div className="absolute right-2.5 top-[42px] flex items-center gap-1.5 bg-black/45 border border-white/10 p-0.5 rounded-lg shadow-lg pointer-events-auto z-20 select-none">
+                <div className="flex gap-1 max-w-[170px] overflow-x-auto">
                   {hudState.availableWeapons.map((w) => {
                     const isActive = hudState.selectedWeaponId === w.id;
                     const hasAmmo = (hudState.ammoRemaining[w.id] ?? 99) > 0;
                     let bgClass = 'bg-orange-500/80 border-orange-400 text-white';
                     let emojiSpec = '💣';
-                    if (w.id === 'standard') { bgClass = 'bg-orange-500/80 border-orange-400 text-white'; emojiSpec = '💣'; }
-                    else if (w.id === 'split_shot') { bgClass = 'bg-sky-400/80 border-sky-300 text-white'; emojiSpec = '☄️'; }
-                    else if (w.id === 'heavy_shell') { bgClass = 'bg-pink-500/80 border-pink-400 text-white'; emojiSpec = '🔮'; }
-                    else if (w.id === 'napalm_strike') { bgClass = 'bg-red-500/80 border-red-400 text-white'; emojiSpec = '🔥'; }
-                    else if (w.id === 'bouncy_ball') { bgClass = 'bg-lime-500/80 border-lime-400 text-white'; emojiSpec = '🏐'; }
-                    else if (w.id === 'pierce_bullet') { bgClass = 'bg-cyan-500/80 border-cyan-400 text-white'; emojiSpec = '🚀'; }
-                    else if (w.id === 'gravity_bomb') { bgClass = 'bg-violet-500/80 border-violet-400 text-white'; emojiSpec = '🌀'; }
-                    else if (w.id === 'inferno') { bgClass = 'bg-emerald-500/80 border-emerald-400 text-white'; emojiSpec = '☄️'; }
+                    if (w.id === 'basic') { bgClass = 'bg-slate-500/80 border-slate-400 text-white'; emojiSpec = '⚪'; }
+                    else if (w.id === 'bomb') { bgClass = 'bg-orange-600/80 border-orange-500 text-white'; emojiSpec = '💣'; }
+                    else if (w.id === 'split') { bgClass = 'bg-teal-500/80 border-teal-400 text-white'; emojiSpec = '☄️'; }
+                    else if (w.id === 'pierce') { bgClass = 'bg-indigo-600/80 border-indigo-500 text-white'; emojiSpec = '🚀'; }
+                    else if (w.id === 'bouncy') { bgClass = 'bg-pink-500/80 border-pink-400 text-white'; emojiSpec = '🏐'; }
+                    else if (w.id === 'gravity') { bgClass = 'bg-purple-600/80 border-purple-500 text-white'; emojiSpec = '🌀'; }
+                    else if (w.id === 'fire') { bgClass = 'bg-yellow-600/80 border-yellow-500 text-white'; emojiSpec = '🔥'; }
+                    else if (w.id === 'arrow') { bgClass = 'bg-amber-600/80 border-amber-500 text-white'; emojiSpec = '🏹'; }
+                    else if (w.id === 'drop_straight') { bgClass = 'bg-rose-600/80 border-rose-500 text-white'; emojiSpec = '⚓'; }
+                    else if (w.id === 'skydrop') { bgClass = 'bg-cyan-600/80 border-cyan-500 text-white'; emojiSpec = '🛰️'; }
+                    else if (w.id === 'megabomb') { bgClass = 'bg-red-650/80 border-red-500 text-white shadow-[0_0_12px_rgba(239,68,68,0.5)]'; emojiSpec = '⚛️'; }
 
                     return (
                       <button
@@ -812,8 +833,29 @@ export default function App() {
                   })}
                 </div>
 
-                {/* Interactive sliders + Fire trigger button */}
-                <div className="bg-black/20 border border-white/5 rounded-lg p-1 text-white font-mono flex flex-col gap-0.5 w-[110px] self-end shadow-md">
+                {/* Sturdy Glowing Shield Activator Button */}
+                <div className="h-9 w-[1px] bg-white/10 mx-0.5 shrink-0" />
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleTriggerShield(); }}
+                  disabled={(hudState.shieldUsesLeft ?? 3) <= 0}
+                  className={`flex flex-col items-center justify-center rounded-md border text-center transition-all shrink-0 cursor-pointer ${
+                    (hudState.shieldUsesLeft ?? 3) > 0
+                      ? 'bg-emerald-600 border-emerald-500 text-emerald-100 hover:bg-emerald-550 shadow-[0_0_10px_rgba(46,204,113,0.3)] hover:shadow-[0_0_15px_rgba(46,204,113,0.6)]'
+                      : 'bg-black/50 border-white/5 text-zinc-650 cursor-not-allowed opacity-30'
+                  }`}
+                  style={{ width: '40px', height: '36px' }}
+                  title={`장벽 보호막 재생성 (남은 횟수: ${hudState.shieldUsesLeft ?? 3}회)`}
+                >
+                  <Shield className={`w-4.5 h-4.5 ${(hudState.shieldUsesLeft ?? 3) > 0 ? "text-emerald-300 animate-pulse" : "text-zinc-600"}`} />
+                  <span className="text-[6.5px] font-mono font-bold leading-none mt-0.5">
+                    SHLD: {hudState.shieldUsesLeft ?? 3}
+                  </span>
+                </button>
+              </div>
+
+              {/* 5. BOTTOM RIGHT: CASSINI PRECISION INPUTS & SLIDERS */}
+              <div className="absolute right-2.5 bottom-2.5 flex flex-col gap-1.5 pointer-events-auto z-20 select-none">
+                <div className="bg-black/20 border border-white/5 rounded-lg p-1 text-white font-mono flex flex-col gap-0.5 w-[110px] shadow-md">
                   {/* Angle slider */}
                   <div>
                     <div className="flex items-center justify-between text-[6.5px] font-semibold">

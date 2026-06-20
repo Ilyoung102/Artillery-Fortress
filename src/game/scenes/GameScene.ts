@@ -16,7 +16,7 @@ export class GameScene extends Scene {
   private currentTurnNumber: number = 1;
   private isPlayerTurn: boolean = true;
   private isAiming: boolean = false;
-  private blockHealthMap = new Map<any, { hp: number; maxHp: number; material: MaterialType }>();
+  private blockHealthMap = new Map<any, { id?: string; hp: number; maxHp: number; material: MaterialType }>();
   private enemyHealthMap = new Map<any, { id: string; hp: number; maxHp: number; name: string }>();
 
   // Active Physical entities
@@ -38,6 +38,7 @@ export class GameScene extends Scene {
   private craters: { x: number; y: number; radius: number }[] = [];
   private hasMiddleHill1: boolean = false;
   private hasMiddleHill2: boolean = false;
+  private movingBackWalls: Array<{ body: any; startY: number; range: number; speed: number; angle: number }> = [];
 
   // Slingshot drag tracking
   private dragStartPos = { x: 0, y: 0 };
@@ -53,6 +54,9 @@ export class GameScene extends Scene {
 
   // React/HUD connection
   private isPaused: boolean = false;
+  private isGameEnded: boolean = false;
+  private isMidAirActionSpent: boolean = false;
+  private shieldUsesLeft: number = 3;
 
   // Clouds and keyboard cursors for tactical movement
   private bgClouds: { graphics: Phaser.GameObjects.Graphics; speed: number }[] = [];
@@ -84,6 +88,15 @@ export class GameScene extends Scene {
     // Deep copy matched data to preserve master templates across restarts
     const rawLevel = matched || LEVELS[0];
     this.levelData = JSON.parse(JSON.stringify(rawLevel));
+    
+    // Dynamically inject custom cool weapons to ensure amazing tactical flexibility across all levels!
+    const defaultWeapons = ["basic", "bomb", "split", "pierce", "bouncy", "gravity", "fire", "arrow", "drop_straight", "skydrop", "megabomb"];
+    if (this.levelData.id === 1) {
+      this.levelData.availableWeapons = ["basic", "arrow"];
+    } else {
+      this.levelData.availableWeapons = defaultWeapons;
+    }
+
     this.windSystem = new WindSystem(this.levelData.windRange);
     
     // Reset state values
@@ -92,12 +105,15 @@ export class GameScene extends Scene {
     this.isPlayerTurn = true;
     this.isAiming = false;
     this.isPaused = false;
+    this.isGameEnded = false;
+    this.shieldUsesLeft = 3;
     this.blockHealthMap.clear();
     this.enemyHealthMap.clear();
     this.blockBodies = [];
     this.enemyBodies = [];
     this.activeProjectile = null;
     this.craters = [];
+    this.movingBackWalls = [];
 
     // Real Player HP Reset
     this.playerMaxHp = 600;
@@ -113,104 +129,98 @@ export class GameScene extends Scene {
     this.hasMiddleHill1 = (levelId % 2 === 1 && levelId >= 3);
     this.hasMiddleHill2 = (levelId % 3 === 0);
 
-    // Reinforce level variety with cool extra defensive shields & tactical barriers dynamically!
-    if (levelId === 2) {
-      if (!this.levelData.blocks.some(b => b.id.startsWith("shield_"))) {
-        this.levelData.blocks.push(
-          { id: "shield_g1", x: 740, y: 460, width: 15, height: 110, material: "glass", shape: "box" }
-        );
-      }
-    } else if (levelId === 4) {
-      if (!this.levelData.blocks.some(b => b.id.startsWith("shield_"))) {
-        this.levelData.blocks.push(
-          { id: "shield_s1", x: 670, y: 460, width: 24, height: 100, material: "stone", shape: "box" }
-        );
-      }
-    } else if (levelId === 5) {
-      if (!this.levelData.blocks.some(b => b.id.startsWith("shield_"))) {
-        this.levelData.blocks.push(
-          { id: "shield_s1", x: 470, y: 420, width: 25, height: 160, material: "stone", shape: "box" },
-          { id: "shield_s2", x: 590, y: 440, width: 25, height: 120, material: "stone", shape: "box" }
-        );
-      }
-    } else if (levelId === 8) {
-      if (!this.levelData.blocks.some(b => b.id.startsWith("shield_"))) {
-        this.levelData.blocks.push(
-          { id: "shield_m1", x: 490, y: 220, width: 60, height: 15, material: "metal", shape: "box" },
-          { id: "shield_m2", x: 580, y: 150, width: 60, height: 15, material: "metal", shape: "box" }
-        );
-      }
-    } else if (levelId === 10) {
-      if (!this.levelData.blocks.some(b => b.id.startsWith("shield_"))) {
-        this.levelData.blocks.push(
-          { id: "shield_v1", x: 530, y: 445, width: 25, height: 100, material: "stone", shape: "box" },
-          { id: "shield_v2", x: 530, y: 385, width: 45, height: 45, material: "tnt", shape: "box" }
-        );
-      }
-    } else if (levelId === 12) {
-      if (!this.levelData.blocks.some(b => b.id.startsWith("shield_"))) {
-        this.levelData.blocks.push(
-          { id: "shield_f1", x: 615, y: 290, width: 15, height: 180, material: "metal", shape: "box" },
-          { id: "shield_f2", x: 670, y: 240, width: 80, height: 15, material: "glass", shape: "box" }
-        );
-      }
+    // Completely clear existing template blocks to simplify as requested!
+    this.levelData.blocks = [];
+
+    // 1. Center Blocks Pile ("중앙 2-3개")
+    const centerMat = levelId <= 4 ? "wood" : (levelId <= 8 ? "stone" : "metal");
+    this.levelData.blocks.push({
+      id: "center_middle",
+      x: 500,
+      y: 470,
+      width: 48,
+      height: 90,
+      material: centerMat as any,
+      shape: "box"
+    });
+    this.levelData.blocks.push({
+      id: "center_left",
+      x: 440,
+      y: 495,
+      width: 32,
+      height: 40,
+      material: "wood",
+      shape: "box"
+    });
+    this.levelData.blocks.push({
+      id: "center_right",
+      x: 560,
+      y: 495,
+      width: 32,
+      height: 40,
+      material: "wood",
+      shape: "box"
+    });
+
+    // 2. Hanging Horizontals & Falling Stones Above Ally ("아군 위 허공 가로 벽돌 1-2개 & 그 위 돌")
+    const pStart = this.levelData.playerStart || { x: 180, y: 480 };
+    const allyPlankCount = levelId >= 6 ? 2 : 1;
+    for (let i = 0; i < allyPlankCount; i++) {
+      const plankY = 320 - (i * 45);
+      // Floating static platform brick
+      this.levelData.blocks.push({
+        id: `ally_plank_${i}`,
+        x: pStart.x + 35,
+        y: plankY,
+        width: 100,
+        height: 16,
+        material: "wood",
+        shape: "box",
+        isStatic: true // Floating static suspended block!
+      } as any);
+
+      // Free-falling stone on top
+      this.levelData.blocks.push({
+        id: `ally_stone_${i}`,
+        x: pStart.x + 35,
+        y: plankY - 24,
+        width: 28,
+        height: 28,
+        material: "stone",
+        shape: "box"
+      });
     }
 
-    // Dynamic generation of cool, distinctive defensive shields for both allies (player) and enemies (slime) across ALL levels!
-    if (!this.levelData.blocks.some(b => b.id.startsWith("allyshield_"))) {
-      // Choose materials based on the level theme / difficulty
-      const allyMaterial = levelId <= 3 ? "wood" : (levelId <= 7 ? "stone" : "metal");
-      const enemyMaterial = levelId <= 2 ? "wood" : (levelId <= 6 ? "stone" : "metal");
-
-      const tempPlayerBaseY = this.levelData.playerStart.y + 20; // estimate player base
-      const tempEnemyBaseY = 510;
-
-      // Ally defensive wall protecting from direct frontal trajectories
-      this.levelData.blocks.push({
-        id: "allyshield_wall",
-        x: 290, // Positioned on the player's side platform edge
-        y: tempPlayerBaseY - 45, 
-        width: 20,
-        height: 90,
-        material: allyMaterial as 'wood' | 'stone' | 'metal',
-        shape: "box"
-      });
-
-      // Ally glass dome canopy or shelter ceiling to shield from steep mortars
-      this.levelData.blocks.push({
-        id: "allyshield_ceiling",
-        x: 180, // Hangs right above the player start zone
-        y: tempPlayerBaseY - 100,
-        width: 100,
-        height: 15,
-        material: "glass", // Clear protective canopy!
-        shape: "box"
-      });
-
-      // Enemy defensive shield protecting the right slimes
-      this.levelData.blocks.push({
-        id: "enemyshield_wall",
-        x: 690, // Positioned at the edge of the right enemy platform
-        y: tempEnemyBaseY - 50,
-        width: 22,
-        height: 100,
-        material: enemyMaterial as 'wood' | 'stone' | 'metal',
-        shape: "box"
-      });
-      
-      // Extra defensive overhead shield for enemies at higher levels
-      if (levelId >= 3) {
+    // 3. Hanging Horizontals & Falling Stones Above Enemies ("적군 위 허공 가로 벽돌 1-2개 & 그 위 돌")
+    this.levelData.enemies.forEach((enemy, idx) => {
+      if (idx > 1) return; // Prevent excessive chaos
+      const enemyPlankCount = levelId >= 5 ? 2 : 1;
+      for (let i = 0; i < enemyPlankCount; i++) {
+        const plankY = 320 - (i * 45);
+        // Floating static platform brick
         this.levelData.blocks.push({
-          id: "enemyshield_canopy",
-          x: 720,
-          y: tempEnemyBaseY - 110,
-          width: 70,
-          height: 15,
+          id: `enemy_plank_${idx}_${i}`,
+          x: enemy.x,
+          y: plankY,
+          width: 90,
+          height: 16,
           material: "wood",
+          shape: "box",
+          isStatic: true // Floating static suspended block!
+        } as any);
+
+        // Free-falling stone on top
+        this.levelData.blocks.push({
+          id: `enemy_stone_${idx}_${i}`,
+          x: enemy.x,
+          y: plankY - 24,
+          width: 28,
+          height: 28,
+          material: "stone",
           shape: "box"
         });
       }
-    }
+    });
 
     // Load sound configurations and last selections if stored
     const saveData = SaveSystem.load();
@@ -539,6 +549,17 @@ export class GameScene extends Scene {
       right: Phaser.Input.Keyboard.KeyCodes.D
     });
 
+    // Interaction listeners for mid-air bomb deployment and splits!
+    this.input.on('pointerdown', () => {
+      this.handleMidAirInteraction();
+    });
+    
+    if (this.input.keyboard) {
+      this.input.keyboard.on('keydown-SPACE', () => {
+        this.handleMidAirInteraction();
+      });
+    }
+
     // Initialize trajectory draw buffer
     this.trajectoryGraphics = this.add.graphics();
     this.healthBarGraphics = this.add.graphics();
@@ -586,30 +607,103 @@ export class GameScene extends Scene {
       });
     }
 
+    // 2.7. Dynamically inject Left and Right moving back walls behind armies, if not pre-configured
+    if (!this.levelData.blocks.some(b => b.id && b.id.includes("back_wall_left"))) {
+      this.levelData.blocks.push({
+        id: "back_wall_left",
+        x: 35,
+        y: 285,
+        width: 18,
+        height: 85,
+        material: "metal",
+        shape: "box",
+        rotation: 0
+      });
+    }
+    if (!this.levelData.blocks.some(b => b.id && b.id.includes("back_wall_right"))) {
+      this.levelData.blocks.push({
+        id: "back_wall_right",
+        x: 989,
+        y: 285,
+        width: 18,
+        height: 85,
+        material: "metal",
+        shape: "box",
+        rotation: 0
+      });
+    }
+
     // 3. Assemble Fortress Blocks
     this.levelData.blocks.forEach(block => {
       this.spawnBlock(block);
     });
 
-    // 3.5. Spawn small random walls (could be floating or standing in the air/middle ground)
-    const numRandomWalls = Phaser.Math.Between(4, 7);
+    // 3.5. Spawn random floating walls in various zones (Middle, Left, Right) depending on level
     const materials: Array<'wood' | 'stone' | 'metal' | 'glass'> = ['wood', 'stone', 'metal', 'glass'];
-    for (let i = 0; i < numRandomWalls; i++) {
-      const rx = Phaser.Math.Between(440, 630);
-      const ry = Phaser.Math.Between(150, 420);
-      const rw = Phaser.Math.Between(24, 48);
-      const rh = Phaser.Math.Between(24, 48);
+    
+    // Choose count & zones depending on index
+    let numObstacles = Phaser.Math.Between(3, 5);
+    let allowedZones = ['middle']; // Level 1 & 2 are middle-only so players can practice
+    
+    if (levelId >= 8) {
+      numObstacles = Phaser.Math.Between(8, 11);
+      allowedZones = ['left', 'middle', 'right'];
+    } else if (levelId >= 3) {
+      numObstacles = Phaser.Math.Between(5, 7);
+      allowedZones = ['left', 'middle', 'right'];
+    }
+
+    for (let i = 0; i < numObstacles; i++) {
+      const zone = allowedZones[Phaser.Math.Between(0, allowedZones.length - 1)];
+      let rx = 500;
+      let ry = 250;
+
+      if (zone === 'left') {
+        rx = Phaser.Math.Between(110, 350);
+        ry = Phaser.Math.Between(110, 260); // Float high above player's launching arc
+      } else if (zone === 'right') {
+        rx = Phaser.Math.Between(680, 910);
+        ry = Phaser.Math.Between(100, 290); // Float high above enemy units
+      } else {
+        rx = Phaser.Math.Between(440, 620);
+        ry = Phaser.Math.Between(130, 420);
+      }
+
+      // Safe separation from player's starting slingshot location
+      const sPos = this.levelData.playerStart;
+      if (Phaser.Math.Distance.Between(rx, ry, sPos.x, sPos.y) < 85) {
+        rx += 85;
+      }
+
+      // Material block geometry styling variety (pillar/bar/cube)
+      const rType = Phaser.Math.Between(0, 2);
+      let rw = 32;
+      let rh = 32;
+      if (rType === 1) { // Long vertical pillar
+        rw = Phaser.Math.Between(16, 24);
+        rh = Phaser.Math.Between(55, 95);
+      } else if (rType === 2) { // Long horizontal platform
+        rw = Phaser.Math.Between(55, 95);
+        rh = Phaser.Math.Between(16, 24);
+      } else { // Regular cube
+        rw = rh = Phaser.Math.Between(26, 44);
+      }
+
       const rmat = materials[Phaser.Math.Between(0, materials.length - 1)];
-      const isStatic = Math.random() > 0.4; // 60% are static floating block barriers!
+      const isStatic = Math.random() > 0.44; // ~56% are stationary floaters
+      const randAngle = Math.random() > 0.48 ? Phaser.Math.Between(-30, 30) : 0;
 
       const blockObj = this.matter.add.image(rx, ry, `block_${rmat}`, undefined, {
         isStatic: isStatic,
-        friction: 0.3,
-        restitution: 0.1,
+        friction: 0.35,
+        restitution: 0.15,
         density: 0.02,
         label: `block_${rmat}`
       });
       blockObj.setDisplaySize(rw, rh);
+      if (randAngle !== 0) {
+        blockObj.setAngle(randAngle);
+      }
 
       this.blockBodies.push(blockObj);
       const maxHp = DamageSystem.getMaterialMaxHp(rmat);
@@ -661,6 +755,17 @@ export class GameScene extends Scene {
   update() {
     // Update animated hazard wave graphics
     this.updateHazardLiquid();
+
+    // Update vertical moving backwalls
+    if (this.movingBackWalls && this.movingBackWalls.length > 0) {
+      this.movingBackWalls.forEach(wall => {
+        wall.angle += wall.speed * 8; // step angle
+        const nextY = wall.startY + Math.sin(wall.angle) * wall.range;
+        if (wall.body) {
+          this.matter.body.setPosition(wall.body, { x: wall.body.position.x, y: nextY });
+        }
+      });
+    }
 
     // Update drifting clouds background parallax
     if (this.bgClouds && this.bgClouds.length > 0) {
@@ -744,33 +849,59 @@ export class GameScene extends Scene {
       }
     }
 
-    // Monitoring dynamic physical blocks falling in hazard lava/liquid pool
+    // Monitoring dynamic physical blocks falling below stage bottom
     for (let i = this.blockBodies.length - 1; i >= 0; i--) {
       const block = this.blockBodies[i];
       if (block && block.body) {
         const bx = block.x;
         const by = block.y;
-        if (bx > 410 && bx < 660 && by > 550) {
-          this.spawnSplashEffects(bx, by);
+        if (by > 570) {
+          if (bx > 410 && bx < 660) {
+            this.spawnSplashEffects(bx, by);
+          }
           this.destroyBlock(block.body);
         }
       }
     }
 
-    // Monitoring enemies falling in hazard lava/liquid pool
+    // Monitoring enemies falling below stage bottom
     for (let i = this.enemyBodies.length - 1; i >= 0; i--) {
       const enemy = this.enemyBodies[i];
       if (enemy && enemy.body) {
         const ex = enemy.x;
         const ey = enemy.y;
-        if (ex > 410 && ex < 660 && ey > 550) {
-          this.spawnSplashEffects(ex, ey);
+        if (ey > 570) {
+          if (ex > 410 && ex < 660) {
+            this.spawnSplashEffects(ex, ey);
+          }
           const record = this.enemyHealthMap.get(enemy.body);
           if (record) {
             record.hp = 0;
             this.destroyEnemy(enemy.body);
           }
         }
+      }
+    }
+
+    // Monitoring active player falling below stage bottom
+    if (this.activePlayerUnit && this.activePlayerUnit.active) {
+      if (this.activePlayerUnit.y > 570) {
+        const px = this.activePlayerUnit.x;
+        const py = this.activePlayerUnit.y;
+        if (px > 410 && px < 660) {
+          this.spawnSplashEffects(px, py);
+        }
+        this.playerHp = 0;
+        this.cameras.main.flash(400, 255, 0, 0);
+        this.playBreakSound('enemy');
+        this.spawnFloatingTxt(px, 480, "ALLY FELL OFF! 💀", "#ff3333");
+        
+        // Remove player unit sprite from screen
+        this.activePlayerUnit.destroy();
+        this.activePlayerUnit = null;
+
+        this.notifyHUD();
+        this.checkGameEndStatus();
       }
     }
 
@@ -948,16 +1079,20 @@ export class GameScene extends Scene {
       materialVal = 'wood';
     }
 
-    const maxHp = DamageSystem.getMaterialMaxHp(materialVal);
+    const baseMaxHp = DamageSystem.getMaterialMaxHp(materialVal);
     const density = materialVal === 'metal' ? 0.05 : materialVal === 'stone' ? 0.03 : 0.015;
     const friction = materialVal === 'metal' ? 0.15 : 0.4;
     const restitution = materialVal === 'glass' ? 0.1 : materialVal === 'wood' ? 0.2 : 0.05;
+
+    // Check if block should be stationary (static) physically
+    const isStatic = !!(data.isStatic || (data.id && data.id.startsWith("back_wall")));
 
     // Matter physical rectangle
     const block = this.matter.add.image(data.x, data.y, `block_${materialVal}`, undefined, {
       friction,
       restitution,
       density,
+      isStatic,
       label: `block_${materialVal}`
     });
 
@@ -969,11 +1104,27 @@ export class GameScene extends Scene {
       block.setAngle(data.rotation);
     }
 
+    if (data.id && data.id.startsWith("back_wall")) {
+      this.movingBackWalls.push({
+        body: block.body,
+        startY: data.y,
+        range: 120, // vertical motion range
+        speed: 0.002, // speed of movement
+        angle: Math.random() * Math.PI // start at random phase
+      });
+    }
+
+    // Scale block HP depending on the current level for progressive strength!
+    const levelId = this.levelData.id || 1;
+    const hpScale = 1 + (levelId - 1) * 0.25;
+    const scaledHp = Math.round(baseMaxHp * hpScale);
+
     // Keep handle reference
     this.blockBodies.push(block);
     this.blockHealthMap.set(block.body, {
-      hp: maxHp,
-      maxHp,
+      id: data.id,
+      hp: scaledHp,
+      maxHp: scaledHp,
       material: materialVal
     });
   }
@@ -1088,7 +1239,9 @@ export class GameScene extends Scene {
       const vyCorrect = dy * dragMultiplier;
 
       // Physically shift character visual slightly to mimic slingshot rubber stretching!
-      this.activePlayerUnit.setPosition(startX - dx, startY - dy);
+      if (this.activePlayerUnit && typeof this.activePlayerUnit.setPosition === 'function') {
+        this.activePlayerUnit.setPosition(startX - dx, startY - dy);
+      }
 
       // Redraw dots
       this.drawTrajectory(startX, startY, vx, vyCorrect);
@@ -1098,7 +1251,9 @@ export class GameScene extends Scene {
         this.stopAimCharge();
       }
       this.isAiming = false;
-      this.activePlayerUnit.setPosition(startX, startY);
+      if (this.activePlayerUnit && typeof this.activePlayerUnit.setPosition === 'function') {
+        this.activePlayerUnit.setPosition(startX, startY);
+      }
       this.trajectoryGraphics.clear();
     }
   }
@@ -1130,8 +1285,8 @@ export class GameScene extends Scene {
     const rightProngX = sx + 18;
     const rightProngY = sy - 22;
 
-    const dragX = this.activePlayerUnit.x;
-    const dragY = this.activePlayerUnit.y;
+    const dragX = this.activePlayerUnit ? this.activePlayerUnit.x : sx;
+    const dragY = this.activePlayerUnit ? this.activePlayerUnit.y : sy;
 
     // Draw elastic shadow lines for rich 3D appearance
     this.trajectoryGraphics.lineStyle(6, 0x1a1c23, 0.45);
@@ -1243,6 +1398,9 @@ export class GameScene extends Scene {
     const sPos = isEnemyWeapon ? { x: 800, y: 150 } : this.levelData.playerStart; // Enemy position or player position
     const weaponData = WEAPONS[this.selectedWeaponId] || WEAPONS.basic;
     
+    // Reset mid-air action spent tracker for the new firing event!
+    this.isMidAirActionSpent = false;
+
     // Create new Matter circle body projectile
     const projColor = isEnemyWeapon ? 0xe03131 : weaponData.color;
     
@@ -1251,10 +1409,63 @@ export class GameScene extends Scene {
     if (!this.textures.exists(projSpriteKey)) {
       const g = this.add.graphics();
       g.fillStyle(projColor, 1);
-      g.fillCircle(12, 12, 11);
       g.lineStyle(1.5, 0xffffff, 1);
-      g.strokeCircle(12, 12, 11);
-      g.generateTexture(projSpriteKey, 24, 24);
+
+      if (!isEnemyWeapon && weaponData.id === 'arrow') {
+        // Triangle/Arrow shape pointing forwards
+        g.beginPath();
+        g.moveTo(22, 12);
+        g.lineTo(4, 4);
+        g.lineTo(9, 12);
+        g.lineTo(4, 20);
+        g.closePath();
+        g.fillPath();
+        g.strokePath();
+        g.generateTexture(projSpriteKey, 24, 24);
+      } else if (!isEnemyWeapon && weaponData.id === 'drop_straight') {
+        // Spike bullet shape
+        g.fillRect(8, 6, 8, 14);
+        g.strokeRect(8, 6, 8, 14);
+        g.beginPath();
+        g.moveTo(12, 1);
+        g.lineTo(5, 6);
+        g.lineTo(19, 6);
+        g.closePath();
+        g.fillPath();
+        g.strokePath();
+        g.generateTexture(projSpriteKey, 24, 24);
+      } else if (!isEnemyWeapon && weaponData.id === 'skydrop') {
+        // Satellite orb with side nodes
+        g.fillStyle(0x00f0ff, 1);
+        g.fillCircle(12, 12, 7);
+        g.fillRect(2, 10, 20, 4);
+        g.strokeCircle(12, 12, 7);
+        g.generateTexture(projSpriteKey, 24, 24);
+      } else if (!isEnemyWeapon && weaponData.id === 'megabomb') {
+        // Mega spiked mining bomb!
+        g.fillStyle(0xd35400, 1);
+        g.fillCircle(12, 12, 9);
+        // Add 8 little spike nodes
+        for (let a = 0; a < Math.PI * 2; a += Math.PI / 4) {
+          const sx = 12 + Math.cos(a) * 9;
+          const sy = 12 + Math.sin(a) * 9;
+          g.fillStyle(0xffffff, 1);
+          g.fillCircle(sx, sy, 2);
+        }
+        g.strokeCircle(12, 12, 9);
+        g.generateTexture(projSpriteKey, 24, 24);
+      } else if (!isEnemyWeapon && weaponData.id === 'bouncy') {
+        // Highly elastic glowing cube shape!
+        g.fillRect(4, 4, 16, 16);
+        g.strokeRect(4, 4, 16, 16);
+        g.generateTexture(projSpriteKey, 24, 24);
+      } else {
+        // Standard circle
+        g.fillCircle(12, 12, 11);
+        g.strokeCircle(12, 12, 11);
+        g.generateTexture(projSpriteKey, 24, 24);
+      }
+      
       g.destroy();
     }
 
@@ -1325,8 +1536,16 @@ export class GameScene extends Scene {
           
           this.handleProjectileImpact(pBody, otherBody);
         } else {
-          // Block-to-block or block-to-enemy fall damage collisions!
-          this.handleGenericPhysicalImpact(bodyA, bodyB);
+          const isShrapnelA = (bodyA.label === 'hazard_shrapnel');
+          const isShrapnelB = (bodyB.label === 'hazard_shrapnel');
+          if (isShrapnelA || isShrapnelB) {
+            const sBody = isShrapnelA ? bodyA : bodyB;
+            const otherBody = isShrapnelA ? bodyB : bodyA;
+            this.handleShrapnelImpact(sBody, otherBody);
+          } else {
+            // Block-to-block or block-to-enemy fall damage collisions!
+            this.handleGenericPhysicalImpact(bodyA, bodyB);
+          }
         }
       });
     });
@@ -1345,22 +1564,36 @@ export class GameScene extends Scene {
     // 2. Handle block damage
     if (this.blockHealthMap.has(otherBody)) {
       const record = this.blockHealthMap.get(otherBody)!;
-      const dmg = DamageSystem.calculateImpactDamage(velocityMag, wInfo.weight, record.material);
-      
-      record.hp -= dmg;
-      this.score += Math.round(dmg * 1.5);
-      
-      // Visual damage indicators: change transparency or spawn debris
-      if (otherBody.gameObject) {
-        otherBody.gameObject.setAlpha(Math.max(0.3, record.hp / record.maxHp));
-      }
+      const isBackWall = !!(record.id && record.id.includes("back_wall"));
 
-      const pX = (otherBody && otherBody.position && typeof otherBody.position.x === 'number') ? otherBody.position.x : (otherBody && otherBody.gameObject ? otherBody.gameObject.x : 0);
-      const pY = (otherBody && otherBody.position && typeof otherBody.position.y === 'number') ? otherBody.position.y : (otherBody && otherBody.gameObject ? otherBody.gameObject.y : 0);
-      this.spawnDebris(pX, pY, record.material, 5);
+      if (!isBackWall) {
+        const dmg = DamageSystem.calculateImpactDamage(velocityMag, wInfo.weight, record.material);
+        record.hp -= dmg;
+        this.score += Math.round(dmg * 1.5);
+        
+        // Visual damage indicators: change transparency or spawn debris
+        if (otherBody.gameObject) {
+          otherBody.gameObject.setAlpha(Math.max(0.3, record.hp / record.maxHp));
+        }
 
-      if (record.hp <= 0) {
-        this.destroyBlock(otherBody);
+        const pX = (otherBody && otherBody.position && typeof otherBody.position.x === 'number') ? otherBody.position.x : (otherBody && otherBody.gameObject ? otherBody.gameObject.x : 0);
+        const pY = (otherBody && otherBody.position && typeof otherBody.position.y === 'number') ? otherBody.position.y : (otherBody && otherBody.gameObject ? otherBody.gameObject.y : 0);
+        this.spawnDebris(pX, pY, record.material, 5);
+
+        if (record.id && record.id.includes("floating_target")) {
+          this.triggerFloatingTargetDebrisBurst(pX, pY);
+        }
+
+        if (record.hp <= 0) {
+          this.destroyBlock(otherBody);
+        }
+      } else {
+        // Back-wall is completely indestructible. Deflect back toward playfield.
+        const isLeftWall = record.id && record.id.includes("left");
+        const dirX = isLeftWall ? 3.2 : -3.2; // deflect towards the middle ground platform!
+        this.matter.body.setVelocity(pBody, { x: dirX, y: 4.5 });
+        this.spawnFloatingTxt(pBody.position.x, pBody.position.y - 20, isLeftWall ? "DEFLECT FORWARD! ➡️" : "DEFLECT FORWARD! ⬅️", "#00f0ff");
+        this.playBeep(210, 0.12);
       }
     }
 
@@ -1404,7 +1637,7 @@ export class GameScene extends Scene {
 
     // 5. Check for special splash ammo explosions (TNT or standard bomb)
     const isEnemy = (this.activeProjectile as any).isEnemy;
-    if (wInfo.specialEffect === 'explode' || wInfo.specialEffect === 'gravity' || wInfo.specialEffect === 'fire' || isEnemy) {
+    if (wInfo.specialEffect === 'explode' || wInfo.specialEffect === 'gravity' || wInfo.specialEffect === 'fire' || wInfo.specialEffect === 'giant_explode' || isEnemy) {
       const pX = (pBody && pBody.position && typeof pBody.position.x === 'number') ? pBody.position.x : (pBody && pBody.gameObject ? pBody.gameObject.x : 0);
       const pY = (pBody && pBody.position && typeof pBody.position.y === 'number') ? pBody.position.y : (pBody && pBody.gameObject ? pBody.gameObject.y : 0);
       this.executeExplosionAt(pX, pY, wInfo);
@@ -1456,6 +1689,7 @@ export class GameScene extends Scene {
     if (!b) return;
     if (!this.blockHealthMap.has(b)) return;
     const record = this.blockHealthMap.get(b)!;
+    if (record.id && record.id.includes("back_wall")) return; // Indestructible safety guard!
     this.score += 200; // Block destruction score bonus
 
     const posX = (b.position && typeof b.position.x === 'number') ? b.position.x : (b.gameObject ? b.gameObject.x : 0);
@@ -1482,6 +1716,154 @@ export class GameScene extends Scene {
       b.gameObject.destroy();
     }
     this.matter.world.remove(b);
+  }
+
+  private handleMidAirInteraction() {
+    if (!this.activeProjectile || !this.activeProjectile.active || (this.activeProjectile as any).isEnemy) {
+      return;
+    }
+    if (this.isMidAirActionSpent) {
+      return;
+    }
+
+    const weaponId = (this.activeProjectile as any).weaponId;
+    const body = this.activeProjectile.body;
+    if (!body || !body.position) return;
+
+    if (weaponId === 'split') {
+      this.isMidAirActionSpent = true;
+      this.playBeep(450, 0.1);
+      
+      const vx = body.velocity.x;
+      const vy = body.velocity.y;
+      const x = body.position.x;
+      const y = body.position.y;
+      this.spawnDebris(x, y, 'glass', 5);
+
+      const trail = (this.activeProjectile as any).trailParticles;
+      if (trail) trail.destroy();
+      this.activeProjectile.destroy();
+      this.matter.world.remove(body);
+      this.activeProjectile = null;
+
+      const angles = [-0.18, 0, 0.18];
+      const speed = Math.sqrt(vx * vx + vy * vy) || 7;
+      const baseAngle = Math.atan2(vy, vx);
+
+      const pellets: any[] = [];
+      angles.forEach((offsetAngle) => {
+        const finalAngle = baseAngle + offsetAngle;
+        const pVx = Math.cos(finalAngle) * speed;
+        const pVy = Math.sin(finalAngle) * speed;
+
+        const pSpriteKey = `bullet_split`;
+        if (!this.textures.exists(pSpriteKey)) {
+          const g = this.add.graphics();
+          g.fillStyle(0x1abc9c, 1);
+          g.fillCircle(12, 12, 7);
+          g.lineStyle(1.2, 0xffffff, 1);
+          g.strokeCircle(12, 12, 7);
+          g.generateTexture(pSpriteKey, 24, 24);
+          g.destroy();
+        }
+
+        const proj = this.add.image(x, y, pSpriteKey);
+        this.matter.add.gameObject(proj, {
+          shape: { type: 'circle', radius: 8 },
+          density: 0.02,
+          frictionAir: 0.0,
+          restitution: 0.3,
+          label: 'projectile'
+        });
+        (proj as any).setVelocity(pVx, pVy);
+        (proj as any).spawnTime = this.time.now;
+        (proj as any).weaponId = 'basic';
+        (proj as any).isEnemy = false;
+        
+        const pt = this.add.particles(0, 0, 'smoke_particle', {
+          scale: { start: 0.6, end: 0.1 },
+          alpha: { start: 0.6, end: 0 },
+          lifespan: 400,
+          frequency: 32,
+          follow: proj,
+          blendMode: 'ADD'
+        });
+        (proj as any).trailParticles = pt;
+        
+        pellets.push(proj);
+      });
+
+      this.activeProjectile = pellets[1];
+      this.spawnFloatingTxt(x, y, "SPLIT SHOT!", "#1abc9c");
+      this.notifyHUD();
+    } 
+    else if (weaponId === 'drop_straight') {
+      this.isMidAirActionSpent = true;
+      this.playBeep(300, 0.1);
+      
+      this.matter.body.setVelocity(body, { x: 0, y: 15 });
+      this.spawnFloatingTxt(body.position.x, body.position.y - 20, "ORBITAL PLUNGE! ☄️", "#e74c3c");
+      
+      const flare = this.add.circle(body.position.x, body.position.y + 15, 14, 0xf1c40f, 0.9);
+      this.tweens.add({
+        targets: flare,
+        alpha: 0,
+        scale: 2.2,
+        duration: 250,
+        onComplete: () => flare.destroy()
+      });
+    }
+    else if (weaponId === 'skydrop') {
+      this.isMidAirActionSpent = true;
+      this.playBeep(400, 0.1);
+      
+      const px = body.position.x;
+      const py = body.position.y;
+      
+      this.matter.body.setVelocity(body, { x: body.velocity.x * 0.25, y: body.velocity.y * 0.5 });
+      this.spawnFloatingTxt(px, py - 20, "AIRSTRIKE INBOUND! 🛰️", "#00f0ff");
+      
+      const subSpriteKey = 'bullet_bomb';
+      if (!this.textures.exists(subSpriteKey)) {
+        const g = this.add.graphics();
+        g.fillStyle(0xe8590c, 1);
+        g.fillCircle(12, 12, 9);
+        g.lineStyle(1.2, 0xffffff, 1);
+        g.strokeCircle(12, 12, 9);
+        g.generateTexture(subSpriteKey, 24, 24);
+        g.destroy();
+      }
+
+      for (let i = 0; i < 3; i++) {
+        const offsetLeft = (i - 1) * 32;
+        const bX = px + offsetLeft;
+        const bY = py + 12;
+
+        const bImg = this.add.image(bX, bY, subSpriteKey);
+        this.matter.add.gameObject(bImg, {
+          shape: { type: 'circle', radius: 9 },
+          density: 0.04,
+          frictionAir: 0.005,
+          restitution: 0.1,
+          label: 'projectile'
+        });
+        
+        (bImg as any).setVelocity(Phaser.Math.Between(-1.5, 1.5), 7 + i * 1.5);
+        (bImg as any).spawnTime = this.time.now;
+        (bImg as any).weaponId = 'bomb';
+        (bImg as any).isEnemy = false;
+
+        const pt = this.add.particles(0, 0, 'smoke_particle', {
+          scale: { start: 0.6, end: 0.1 },
+          alpha: { start: 0.6, end: 0 },
+          lifespan: 300,
+          frequency: 30,
+          follow: bImg,
+          blendMode: 'ADD'
+        });
+        (bImg as any).trailParticles = pt;
+      }
+    }
   }
 
   private destroyEnemy(b: any) {
@@ -1517,18 +1899,38 @@ export class GameScene extends Scene {
     const maxDamage = weapon.damage * 1.5;
 
     // Use a real Phaser Arc Game Object (circle) which scales from center (exX, exY) and handles alpha perfectly
-    const burstColor = weapon.specialEffect === 'gravity' ? 0x7048e8 : 0xff761b;
+    let burstColor = 0xff761b;
+    if (weapon.specialEffect === 'gravity') {
+      burstColor = 0x7048e8;
+    } else if (weapon.specialEffect === 'giant_explode') {
+      burstColor = 0xff2a2a;
+    }
+    
     const fireCircle = this.add.circle(exX, exY, radius, burstColor, 0.85);
     
     this.tweens.add({
       targets: fireCircle,
       alpha: 0,
-      scale: 1.3,
-      duration: 350,
+      scale: 1.35,
+      duration: 380,
       onComplete: () => fireCircle.destroy()
     });
 
-    this.cameras.main.shake(180, 0.018);
+    if (weapon.specialEffect === 'giant_explode') {
+      // White hot core flash
+      const innerCore = this.add.circle(exX, exY, radius * 0.4, 0xffffff, 0.95);
+      this.tweens.add({
+        targets: innerCore,
+        alpha: 0,
+        scale: 2.2,
+        duration: 320,
+        onComplete: () => innerCore.destroy()
+      });
+      // Massive cinematic camera vibration
+      this.cameras.main.shake(320, 0.032);
+    } else {
+      this.cameras.main.shake(180, 0.018);
+    }
     
     // Play massive deep explosive synthesize rumble sound
     this.playBreakSound('tnt');
@@ -1545,6 +1947,7 @@ export class GameScene extends Scene {
     // Apply radial physical forces to adjacent dynamic blocks & deal splash damage
     this.blockHealthMap.forEach((record, b) => {
       if (!b || !b.position) return;
+      if (record.id && record.id.includes("back_wall")) return; // Completely immune to explosions!
       const dx = b.position.x - exX;
       const dy = b.position.y - exY;
       const dist = Math.sqrt(dx * dx + dy * dy);
@@ -1654,6 +2057,109 @@ export class GameScene extends Scene {
       duration: 1000,
       ease: 'Cubic.out',
       onComplete: () => ftext.destroy()
+    });
+  }
+
+  private triggerFloatingTargetDebrisBurst(fx: number, fy: number) {
+    this.playBeep(440, 0.2); // Special trigger sound!
+    this.spawnFloatingTxt(fx, fy - 35, "TARGET SECURED! CASCADE FALL!", "#ffa94d");
+
+    // Spawn 8-12 physical shrapnel items cascading from above the target coordinates
+    const count = Phaser.Math.Between(8, 12);
+    for (let i = 0; i < count; i++) {
+      const rx = fx + Phaser.Math.Between(-140, 140);
+      const ry = fy - Phaser.Math.Between(160, 320); // physically high up!
+      const type = Phaser.Math.Between(0, 2); // 0 = arrow (wood), 1 = stone, 2 = metal fragment
+
+      let texture = "block_wood";
+      let material: MaterialType = "wood";
+      let size = { w: 12, h: 12 };
+
+      if (type === 1) {
+        texture = "block_stone";
+        material = "stone";
+        size = { w: 14, h: 14 };
+      } else if (type === 2) {
+        texture = "block_metal";
+        material = "metal";
+        size = { w: 12, h: 6 }; // flat fragment
+      } else {
+        // Arrow representation
+        texture = "block_wood";
+        material = "wood";
+        size = { w: 16, h: 5 };
+      }
+
+      // Add as dynamic physical body falling under full gravity
+      const shrapnel = this.matter.add.image(rx, ry, texture, undefined, {
+        restitution: 0.35,
+        friction: 0.15,
+        density: 0.012,
+        label: "hazard_shrapnel"
+      });
+
+      shrapnel.setDisplaySize(size.w, size.h);
+      shrapnel.setAngle(Phaser.Math.Between(0, 360));
+      // Give it slightly randomized initial speed down
+      this.matter.body.setVelocity(shrapnel.body as any, {
+        x: Phaser.Math.FloatBetween(-1.5, 1.5),
+        y: Phaser.Math.FloatBetween(2, 6)
+      });
+
+      // Auto-expire after 6.0 seconds so bodies don't pile up
+      this.time.delayedCall(6000, () => {
+        if (shrapnel && shrapnel.active) {
+          shrapnel.destroy();
+        }
+      });
+    }
+  }
+
+  private handleShrapnelImpact(sBody: any, otherBody: any) {
+    if (!sBody || !sBody.gameObject) return;
+
+    // Avoid self double collision
+    sBody.label = 'inactive';
+
+    const sx = sBody.position.x;
+    const sy = sBody.position.y;
+    this.spawnDebris(sx, sy, 'glass', 2);
+    this.playBeep(450 + Math.random() * 200, 0.02);
+
+    // If hits enemy
+    if (this.enemyHealthMap.has(otherBody)) {
+      const record = this.enemyHealthMap.get(otherBody)!;
+      const dmg = Phaser.Math.Between(20, 35);
+      record.hp -= dmg;
+      this.score += dmg * 6;
+      
+      this.spawnFloatingTxt(sx, sy - 20, `-${dmg} HP`, '#f1c40f');
+      this.spawnDebris(sx, sy, 'tnt', 5); // red flashes
+
+      if (record.hp <= 0) {
+        this.destroyEnemy(otherBody);
+      }
+    } 
+    // If hits block
+    else if (this.blockHealthMap.has(otherBody)) {
+      const record = this.blockHealthMap.get(otherBody)!;
+      const dmg = Phaser.Math.Between(12, 22);
+      record.hp -= dmg;
+      if (otherBody.gameObject) {
+        otherBody.gameObject.setAlpha(Math.max(0.3, record.hp / record.maxHp));
+      }
+      if (record.hp <= 0) {
+        this.destroyBlock(otherBody);
+      }
+    }
+
+    // Destroy the shrapnel physical object safely
+    this.time.delayedCall(10, () => {
+      try {
+        if (sBody.gameObject) {
+          sBody.gameObject.destroy();
+        }
+      } catch (e) {}
     });
   }
 
@@ -1903,6 +2409,9 @@ export class GameScene extends Scene {
   }
 
   private triggerGameResult(isWin: boolean) {
+    if (this.isGameEnded) return;
+    this.isGameEnded = true;
+
     let stars = 0;
     if (isWin) {
       // Calculate star count based on remaining turns compared to golden stars conditions config
@@ -1952,6 +2461,7 @@ export class GameScene extends Scene {
       ammoRemaining: this.ammoRemaining,
       enemiesLeft: this.enemyBodies.length,
       enemiesTotal: this.levelData.enemies.length,
+      shieldUsesLeft: this.shieldUsesLeft,
       // Pass player and first enemy health percentage
       playerHp: Math.round((this.playerHp / this.playerMaxHp) * 100), 
       activeProjectileActive: this.activeProjectile !== null
@@ -1959,6 +2469,62 @@ export class GameScene extends Scene {
 
     // Broadcast through game global emitter safely
     this.game.events.emit("hud_update", hudState);
+  }
+
+  public activateShield(): boolean {
+    if (this.isGameEnded) return false;
+    if (this.shieldUsesLeft <= 0) {
+      this.playBeep(120, 0.1);
+      return false;
+    }
+    if (!this.activePlayerUnit) return false;
+
+    this.shieldUsesLeft--;
+    this.playBeep(880, 0.25);
+    this.time.delayedCall(100, () => this.playBeep(1200, 0.2));
+
+    this.spawnFloatingTxt(this.activePlayerUnit.x, this.activePlayerUnit.y - 45, "SHIELD CHARGED!", "#2ecc71");
+
+    // Spawn a radiant glowing protective static energy wall in front of the player
+    const sx = this.activePlayerUnit.x + 70;
+    const sy = this.activePlayerUnit.y - 60;
+
+    const shieldBlock = this.matter.add.image(sx, sy, 'block_glass', undefined, {
+      isStatic: true,
+      friction: 0.1,
+      restitution: 0.3,
+      label: 'block_glass'
+    });
+    shieldBlock.setDisplaySize(22, 160);
+    shieldBlock.setTint(0x2ecc71); // Radiant neon green aura tint!
+    shieldBlock.setAlpha(0.9);
+
+    // Spawn green digital charge particles around the wall coordinates
+    for (let i = 0; i < 15; i++) {
+      const px = sx + Phaser.Math.Between(-15, 15);
+      const py = sy + Phaser.Math.Between(-80, 80);
+      const dot = this.add.circle(px, py, Phaser.Math.Between(3, 6), 0x2ecc71, 0.82);
+      this.tweens.add({
+        targets: dot,
+        scale: 0,
+        y: py - Phaser.Math.Between(20, 60),
+        alpha: 0,
+        duration: Phaser.Math.Between(500, 1000),
+        onComplete: () => dot.destroy()
+      });
+    }
+
+    // Keep handle reference so Matter.js runs full physical collisions on this shield
+    this.blockBodies.push(shieldBlock);
+    this.blockHealthMap.set(shieldBlock.body, {
+      id: `shield_barrier_${this.shieldUsesLeft}`,
+      hp: 1500, // Mega HP barrier protection!
+      maxHp: 1500,
+      material: 'glass'
+    });
+
+    this.notifyHUD();
+    return true;
   }
 
   private playBeep(freq: number, duration: number) {

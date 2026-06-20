@@ -76,9 +76,9 @@ export const SaveSystem = {
     record.highScore = Math.max(record.highScore, score);
     record.stars = Math.max(record.stars, stars);
 
-    // Unlock next level (if within bounds of our 12 levels)
+    // Unlock next level (if within bounds of our 24 levels)
     const nextLevelId = levelId + 1;
-    if (nextLevelId <= 12) {
+    if (nextLevelId <= 24) {
       if (!data.progress[nextLevelId]) {
         data.progress[nextLevelId] = { levelId: nextLevelId, unlocked: true, highScore: 0, stars: 0 };
       } else {

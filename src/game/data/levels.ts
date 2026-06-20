@@ -7,6 +7,7 @@ export interface BlockData {
   material: 'wood' | 'stone' | 'metal' | 'glass' | 'tnt';
   shape: 'box' | 'circle';
   rotation?: number; // In degrees
+  isStatic?: boolean;
 }
 
 export interface EnemyPosition {
@@ -365,7 +366,293 @@ export const LEVELS: LevelData[] = [
     availableCharacters: ["lumi", "torbo", "pico", "bumba", "neo"],
     availableWeapons: ["basic", "bomb", "split", "pierce", "bouncy", "gravity", "fire"],
     maxTurns: 12,
-    windRange: 30, // Wild variable winds
+    windRange: 16, // Moderate max wind
     starConditions: { threeStars: 8, twoStars: 5, oneStar: 2 }
+  },
+  {
+    id: 13,
+    name: "제13조: 고공의 부유 거점 (Floating Sky Fortress)",
+    theme: "구름 협곡 (Cloud Skies)",
+    themeColor: "#e6f8fa",
+    playerStart: { x: 160, y: 470 },
+    enemies: [
+      { id: "e13_1", x: 740, y: 460, hp: 80, name: "중력 비행 함대 (Sky Sentry)" },
+      { id: "e13_2", x: 860, y: 380, hp: 60, name: "대공 방어 드론 (Anti-Air Guard)" }
+    ],
+    blocks: [
+      // Floating targets in the mid-air
+      { id: "floating_target_13_1", x: 480, y: 150, width: 35, height: 35, material: "glass", shape: "circle" },
+      { id: "floating_target_13_2", x: 580, y: 220, width: 35, height: 35, material: "glass", shape: "circle" },
+      // Castle structure
+      { id: "b13_s1", x: 720, y: 480, width: 30, height: 80, material: "wood", shape: "box" },
+      { id: "b13_s2", x: 800, y: 480, width: 30, height: 80, material: "wood", shape: "box" },
+      { id: "b13_roof", x: 760, y: 430, width: 120, height: 20, material: "stone", shape: "box" }
+    ],
+    availableCharacters: ["lumi", "pico", "torbo"],
+    availableWeapons: ["basic", "split", "bomb"],
+    maxTurns: 8,
+    windRange: 8,
+    starConditions: { threeStars: 6, twoStars: 4, oneStar: 2 }
+  },
+  {
+    id: 14,
+    name: "제14조: 고대 폐허의 장벽 (Sandstorm Monument)",
+    theme: "사막 유적 (Ancient Dunes)",
+    themeColor: "#fdf8ee",
+    playerStart: { x: 150, y: 480 },
+    enemies: [
+      { id: "e14_1", x: 800, y: 440, hp: 90, name: "미어캣 척후병 (Desert Scout)" }
+    ],
+    blocks: [
+      // Tall Moving backwall blocking over-shots and dropping them straight down
+      { id: "back_wall_14", x: 920, y: 280, width: 20, height: 220, material: "metal", shape: "box" },
+      // Base ruins
+      { id: "b14_1", x: 750, y: 470, width: 30, height: 100, material: "stone", shape: "box" },
+      { id: "b14_2", x: 850, y: 470, width: 30, height: 100, material: "stone", shape: "box" },
+      { id: "b14_slab", x: 800, y: 410, width: 130, height: 20, material: "wood", shape: "box" }
+    ],
+    availableCharacters: ["lumi", "neo"],
+    availableWeapons: ["basic", "pierce", "bouncy"],
+    maxTurns: 7,
+    windRange: 12,
+    starConditions: { threeStars: 5, twoStars: 3, oneStar: 1 }
+  },
+  {
+    id: 15,
+    name: "제15조: 광물 수호병 기지 (Emerald Shard Chamber)",
+    theme: "광산 동굴 (Crystal Mines)",
+    themeColor: "#eefbf4",
+    playerStart: { x: 140, y: 485 },
+    enemies: [
+      { id: "e15_1", x: 720, y: 480, hp: 100, name: "크리스탈 골렘 (Shard Golem)" },
+      { id: "e15_2", x: 840, y: 420, hp: 80, name: "광산 사수 (Cave Archer)" }
+    ],
+    blocks: [
+      // Both floating target CASCADE & moving back wall!
+      { id: "floating_target_15_1", x: 500, y: 180, width: 40, height: 40, material: "glass", shape: "circle" },
+      { id: "back_wall_15", x: 930, y: 300, width: 22, height: 200, material: "metal", shape: "box" },
+      // Mine supports
+      { id: "b15_1", x: 700, y: 480, width: 25, height: 90, material: "wood", shape: "box" },
+      { id: "b15_2", x: 780, y: 480, width: 25, height: 90, material: "wood", shape: "box" },
+      { id: "b15_p", x: 740, y: 425, width: 110, height: 15, material: "stone", shape: "box" }
+    ],
+    availableCharacters: ["lumi", "pico", "bumba"],
+    availableWeapons: ["basic", "bomb", "gravity"],
+    maxTurns: 9,
+    windRange: 6,
+    starConditions: { threeStars: 7, twoStars: 5, oneStar: 2 }
+  },
+  {
+    id: 16,
+    name: "제16조: 가라앉은 비밀 요새 (Abyssal Sub Citadel)",
+    theme: "비밀 함대 (Sunken Atoll)",
+    themeColor: "#edf8f9",
+    playerStart: { x: 170, y: 470 },
+    enemies: [
+      { id: "e16_1", x: 760, y: 460, hp: 110, name: "해양 암살 기동병 (Depth Striker)" },
+      { id: "e16_2", x: 850, y: 460, hp: 90, name: "수중 닻포병 (Anchor Gunner)" }
+    ],
+    blocks: [
+      { id: "floating_target_16", x: 530, y: 200, width: 35, height: 35, material: "glass", shape: "circle" },
+      { id: "back_wall_16", x: 915, y: 280, width: 15, height: 180, material: "metal", shape: "box" },
+      { id: "b16_base", x: 800, y: 490, width: 160, height: 25, material: "stone", shape: "box" },
+      { id: "b16_p1", x: 740, y: 440, width: 20, height: 80, material: "wood", shape: "box" },
+      { id: "b16_p2", x: 860, y: 440, width: 20, height: 80, material: "wood", shape: "box" }
+    ],
+    availableCharacters: ["lumi", "torbo", "neo"],
+    availableWeapons: ["basic", "split", "fire", "pierce"],
+    maxTurns: 8,
+    windRange: 10,
+    starConditions: { threeStars: 6, twoStars: 4, oneStar: 2 }
+  },
+  {
+    id: 17,
+    name: "제17조: 전자기 펄스 시험장 (EMP Sentry Array)",
+    theme: "연구 기지 (Magneto Facility)",
+    themeColor: "#f6f3fc",
+    playerStart: { x: 150, y: 480 },
+    enemies: [
+      { id: "e17_1", x: 780, y: 450, hp: 130, name: "테슬라 대공 보초 (Tesla Coil)" }
+    ],
+    blocks: [
+      { id: "floating_target_17", x: 510, y: 160, width: 35, height: 35, material: "glass", shape: "circle" },
+      { id: "back_wall_17", x: 925, y: 260, width: 25, height: 240, material: "metal", shape: "box" },
+      { id: "b17_wood", x: 780, y: 480, width: 120, height: 60, material: "wood", shape: "box" },
+      { id: "b17_stone", x: 780, y: 420, width: 80, height: 40, material: "stone", shape: "box" }
+    ],
+    availableCharacters: ["neo", "bumba"],
+    availableWeapons: ["basic", "gravity", "bomb"],
+    maxTurns: 8,
+    windRange: 14,
+    starConditions: { threeStars: 6, twoStars: 4, oneStar: 2 }
+  },
+  {
+    id: 18,
+    name: "제18조: 화산 용암 가열 요새 (Volcano Smelter Core)",
+    theme: "용암 대성채 (Molten Smelter)",
+    themeColor: "#fdf3eb",
+    playerStart: { x: 160, y: 480 },
+    enemies: [
+      { id: "e18_1", x: 730, y: 480, hp: 120, name: "철골 용접사 (Smelter Welder)" },
+      { id: "e18_2", x: 850, y: 440, hp: 100, name: "불꽃 비행정 (Pyro Sentry)" }
+    ],
+    blocks: [
+      { id: "floating_target_18_1", x: 450, y: 220, width: 38, height: 38, material: "glass", shape: "circle" },
+      { id: "floating_target_18_2", x: 570, y: 150, width: 38, height: 38, material: "glass", shape: "circle" },
+      { id: "back_wall_18", x: 935, y: 290, width: 20, height: 220, material: "metal", shape: "box" },
+      { id: "b18_m1", x: 710, y: 460, width: 30, height: 110, material: "stone", shape: "box" },
+      { id: "b18_m2", x: 850, y: 460, width: 30, height: 110, material: "stone", shape: "box" }
+    ],
+    availableCharacters: ["lumi", "torbo", "bumba"],
+    availableWeapons: ["basic", "fire", "split", "pierce"],
+    maxTurns: 10,
+    windRange: 12,
+    starConditions: { threeStars: 7, twoStars: 4, oneStar: 2 }
+  },
+  {
+    id: 19,
+    name: "제19조: 얼어붙은 영원의 빙성 (Glacial Peak Bastion)",
+    theme: "영안의 요새 (Frost Peak)",
+    themeColor: "#edf8f9",
+    playerStart: { x: 150, y: 475 },
+    enemies: [
+      { id: "e19_1", x: 790, y: 460, hp: 140, name: "냉기 서궁장 (Frost Warden)" }
+    ],
+    blocks: [
+      { id: "floating_target_19", x: 500, y: 190, width: 44, height: 44, material: "glass", shape: "circle" },
+      { id: "back_wall_19", x: 915, y: 280, width: 20, height: 230, material: "metal", shape: "box" },
+      { id: "b19_ice", x: 740, y: 480, width: 25, height: 90, material: "glass", shape: "box" },
+      { id: "b19_steel", x: 840, y: 480, width: 25, height: 90, material: "stone", shape: "box" }
+    ],
+    availableCharacters: ["lumi", "pico", "neo"],
+    availableWeapons: ["basic", "bouncy", "split"],
+    maxTurns: 8,
+    windRange: 8,
+    starConditions: { threeStars: 6, twoStars: 4, oneStar: 2 }
+  },
+  {
+    id: 20,
+    name: "제20조: 천공의 거대 관문 (Aether Highgate Temple)",
+    theme: "하늘 정원 (Celestia Gates)",
+    themeColor: "#f6fbf9",
+    playerStart: { x: 180, y: 480 },
+    enemies: [
+      { id: "e20_1", x: 720, y: 430, hp: 80, name: "천궁 묘지기 (Aether Guard)" },
+      { id: "e20_2", x: 840, y: 430, hp: 80, name: "환영 군주 (Phantasm Slay)" }
+    ],
+    blocks: [
+      { id: "floating_target_20", x: 510, y: 155, width: 40, height: 40, material: "glass", shape: "circle" },
+      { id: "back_wall_20", x: 928, y: 270, width: 24, height: 210, material: "metal", shape: "box" },
+      // Columns
+      { id: "b20_p1", x: 720, y: 480, width: 40, height: 80, material: "stone", shape: "box" },
+      { id: "b20_p2", x: 840, y: 480, width: 40, height: 80, material: "stone", shape: "box" },
+      { id: "b20_roof", x: 780, y: 410, width: 170, height: 20, material: "wood", shape: "box" }
+    ],
+    availableCharacters: ["lumi", "torbo", "pico", "neo"],
+    availableWeapons: ["basic", "split", "gravity", "pierce"],
+    maxTurns: 9,
+    windRange: 10,
+    starConditions: { threeStars: 6, twoStars: 4, oneStar: 2 }
+  },
+  {
+    id: 21,
+    name: "제21조: 사이버 대공 화기 사일로 (Cyber Sentry Bunker)",
+    theme: "네온 관제구 (Neon Sector)",
+    themeColor: "#f3effa",
+    playerStart: { x: 150, y: 480 },
+    enemies: [
+      { id: "e21_1", x: 780, y: 480, hp: 120, name: "네온 사일로 런처 (Silo Launcher)" },
+      { id: "e21_2", x: 830, y: 380, hp: 70, name: "대공 펄스기 (Cyber Eye Sentry)" }
+    ],
+    blocks: [
+      { id: "floating_target_21_1", x: 480, y: 220, width: 35, height: 35, material: "glass", shape: "circle" },
+      { id: "floating_target_21_2", x: 590, y: 140, width: 35, height: 35, material: "glass", shape: "circle" },
+      { id: "back_wall_21", x: 935, y: 290, width: 22, height: 230, material: "metal", shape: "box" },
+      { id: "b21_m1", x: 730, y: 480, width: 35, height: 95, material: "stone", shape: "box" },
+      { id: "b21_m2", x: 860, y: 480, width: 35, height: 95, material: "stone", shape: "box" }
+    ],
+    availableCharacters: ["neo", "bumba", "torbo"],
+    availableWeapons: ["basic", "gravity", "fire", "split"],
+    maxTurns: 9,
+    windRange: 12,
+    starConditions: { threeStars: 7, twoStars: 4, oneStar: 2 }
+  },
+  {
+    id: 22,
+    name: "제22조: 성운 원형 사막 관측소 (Cosmic Nebula Dome)",
+    theme: "성운 전망소 (Stargaze Platform)",
+    themeColor: "#e6f1fe",
+    playerStart: { x: 160, y: 480 },
+    enemies: [
+      { id: "e22_1", x: 790, y: 440, hp: 150, name: "스타폴 리듀서 (Astro Reducer)" }
+    ],
+    blocks: [
+      { id: "floating_target_22", x: 520, y: 170, width: 45, height: 45, material: "glass", shape: "circle" },
+      { id: "back_wall_22", x: 920, y: 280, width: 18, height: 200, material: "metal", shape: "box" },
+      // High roof
+      { id: "b22_1", x: 750, y: 480, width: 25, height: 110, material: "wood", shape: "box" },
+      { id: "b22_2", x: 850, y: 480, width: 25, height: 110, material: "wood", shape: "box" },
+      { id: "b22_arch", x: 800, y: 400, width: 150, height: 20, material: "stone", shape: "box" }
+    ],
+    availableCharacters: ["lumi", "pico", "neo"],
+    availableWeapons: ["basic", "bouncy", "pierce", "split"],
+    maxTurns: 8,
+    windRange: 10,
+    starConditions: { threeStars: 6, twoStars: 4, oneStar: 2 }
+  },
+  {
+    id: 23,
+    name: "제23조: 섀도우 협곡 지대 (Abyssal Shadow Gorge)",
+    theme: "그림자 암반 (Obsidian Crags)",
+    themeColor: "#eef3fa",
+    playerStart: { x: 150, y: 485 },
+    enemies: [
+      { id: "e23_1", x: 740, y: 480, hp: 100, name: "연기 분열병 (Smoke Splitter)" },
+      { id: "e23_2", x: 850, y: 430, hp: 110, name: "그림자 강습사 (Shadow Raider)" }
+    ],
+    blocks: [
+      { id: "floating_target_23_1", x: 490, y: 160, width: 38, height: 38, material: "glass", shape: "circle" },
+      { id: "floating_target_23_2", x: 590, y: 220, width: 38, height: 38, material: "glass", shape: "circle" },
+      { id: "back_wall_23", x: 933, y: 310, width: 20, height: 190, material: "metal", shape: "box" },
+      { id: "b23_stone", x: 800, y: 480, width: 140, height: 40, material: "stone", shape: "box" },
+      { id: "b23_wood", x: 800, y: 440, width: 80, height: 40, material: "wood", shape: "box" }
+    ],
+    availableCharacters: ["lumi", "torbo", "bumba", "neo"],
+    availableWeapons: ["basic", "fire", "split", "gravity"],
+    maxTurns: 9,
+    windRange: 8,
+    starConditions: { threeStars: 7, twoStars: 4, oneStar: 2 }
+  },
+  {
+    id: 24,
+    name: "제24조: 수호자의 공중 무한 장성 (Zenith Guardian Endline)",
+    theme: "수호전 최종선 (Emperor Apex Court)",
+    themeColor: "#f6f3fc",
+    playerStart: { x: 140, y: 480 },
+    enemies: [
+      { id: "e24_1", x: 740, y: 460, hp: 160, name: "전위 방패 장군 (Dread Vanguard)" },
+      { id: "e24_2", x: 860, y: 460, hp: 160, name: "제국 총결 관리자 (Imperial Arbitrator)" },
+      { id: "e24_3", x: 800, y: 300, hp: 120, name: "무한 수호구체 (Imperial Apex Drone)" }
+    ],
+    blocks: [
+      // Master high targets
+      { id: "floating_target_24_1", x: 440, y: 150, width: 45, height: 45, material: "glass", shape: "circle" },
+      { id: "floating_target_24_2", x: 540, y: 210, width: 45, height: 45, material: "glass", shape: "circle" },
+      { id: "floating_target_24_3", x: 640, y: 140, width: 45, height: 45, material: "glass", shape: "circle" },
+      // Master moving wall
+      { id: "back_wall_24", x: 940, y: 290, width: 25, height: 260, material: "metal", shape: "box" },
+      // Complex fortified structure
+      { id: "b24_p1", x: 700, y: 470, width: 40, height: 110, material: "stone", shape: "box" },
+      { id: "b24_p2", x: 770, y: 470, width: 40, height: 110, material: "stone", shape: "box" },
+      { id: "b24_bridge1", x: 735, y: 410, width: 110, height: 20, material: "metal", shape: "box" },
+      { id: "b24_p3", x: 830, y: 470, width: 40, height: 110, material: "stone", shape: "box" },
+      { id: "b24_p4", x: 900, y: 470, width: 40, height: 110, material: "stone", shape: "box" },
+      { id: "b24_bridge2", x: 865, y: 410, width: 110, height: 20, material: "metal", shape: "box" }
+    ],
+    availableCharacters: ["lumi", "torbo", "pico", "bumba", "neo"],
+    availableWeapons: ["basic", "bomb", "split", "pierce", "bouncy", "gravity", "fire"],
+    maxTurns: 15,
+    windRange: 14,
+    starConditions: { threeStars: 10, twoStars: 6, oneStar: 3 }
   }
 ];

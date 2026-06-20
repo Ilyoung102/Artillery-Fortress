@@ -168,7 +168,7 @@ export class ResultScene extends Scene {
     };
 
     // Row coordinates for grid row layout
-    if (this.payload.status === 'win' && this.payload.levelId < 12) {
+    if (this.payload.status === 'win' && this.payload.levelId < LEVELS.length) {
       // 3 buttons: Next, Replay, Map list
       createBtn(width / 2, 405, '다음 스테이지 ▶', 0x3b82f6, () => {
         this.scene.start("GameScene", { levelId: this.payload.levelId + 1 });

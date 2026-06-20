@@ -9,7 +9,7 @@ export interface WeaponData {
   color: number;
   desc: string;
   ammoLimit: number; // Max ammo config per game
-  specialEffect?: 'basic' | 'explode' | 'split' | 'pierce' | 'bouncy' | 'gravity' | 'napalm' | 'fire';
+  specialEffect?: 'basic' | 'explode' | 'split' | 'pierce' | 'bouncy' | 'gravity' | 'napalm' | 'fire' | 'arrow' | 'drop_straight' | 'skydrop' | 'giant_explode';
 }
 
 export const WEAPONS: Record<string, WeaponData> = {
@@ -103,5 +103,57 @@ export const WEAPONS: Record<string, WeaponData> = {
     desc: "충돌 후 도랑과 타일을 불길로 덮어 연쇄 도트 피해를 적용하는 인센디어리 폭탄입니다.",
     ammoLimit: 3,
     specialEffect: 'fire'
+  },
+  arrow: {
+    id: "arrow",
+    name: "정밀 화살탄 (Aero Arrow)",
+    damage: 45,
+    weight: 0.5,
+    elasticity: 0.1,
+    radius: 9,
+    explosionRadius: 20,
+    color: 0xe67e22, // vivid orange
+    desc: "바람의 영향을 최소화하여 직진성이 우수한 초경량 고속 깃털 슬림 화살탄입니다.",
+    ammoLimit: 4,
+    specialEffect: 'arrow'
+  },
+  drop_straight: {
+    id: "drop_straight",
+    name: "직격 낙적탄 (Orbital Plunge)",
+    damage: 60,
+    weight: 1.4,
+    elasticity: 0.05,
+    radius: 11,
+    explosionRadius: 40,
+    color: 0x962d3e, // rich crimson red
+    desc: "포물선으로 날아가다 공중에서 클릭하거나 1.2초 후 공중에서 정지하며 지면으로 90도 수직 강하 타격을 실행합니다.",
+    ammoLimit: 3,
+    specialEffect: 'drop_straight'
+  },
+  skydrop: {
+    id: "skydrop",
+    name: "폭격 지원탄 (Airstrike Cluster)",
+    damage: 32,
+    weight: 1.2,
+    elasticity: 0.2,
+    radius: 13,
+    explosionRadius: 50,
+    color: 0x1abc9c, // turquoise
+    desc: "공중에서 클릭하거나 타겟 상공에서 격발하면 수평 전진을 정지하고 수직으로 3개의 집속 폭탄들을 다발로 낙하시킵니다.",
+    ammoLimit: 2,
+    specialEffect: 'skydrop'
+  },
+  megabomb: {
+    id: "megabomb",
+    name: "기가 가이아탄 (Gigant Shock)",
+    damage: 130,
+    weight: 2.6,
+    elasticity: 0.15,
+    radius: 20,
+    explosionRadius: 180, // High impact!
+    color: 0xe64980, // deep magenta pink
+    desc: "엄청나게 육중한 특대형 특이 기가 폭탄으로, 주변 요새 건물 전체를 분쇄하는 초대형 충격파를 발생시킵니다.",
+    ammoLimit: 1,
+    specialEffect: 'giant_explode'
   }
 };
