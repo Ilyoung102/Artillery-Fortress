@@ -67,12 +67,12 @@ export class LevelSelectScene extends Scene {
 
     // 24 Levels layout calculation (e.g., 8 columns x 3 rows grid to fit within 1024x600 beautifully)
     const cols = 8;
-    const itemWidth = 80;   // Reduced by 20% from 100
-    const itemHeight = 72;  // Reduced by 20% from 90
-    const paddingX = 90;    // Adjusted proportionally
-    const paddingY = 88;    // Adjusted proportionally
+    const itemWidth = 70;   // Reduced by exactly 30% from base 100
+    const itemHeight = 63;  // Reduced by exactly 30% from base 90
+    const paddingX = 86;    // Compact horizontal padding
+    const paddingY = 82;    // Compact vertical padding
     const startX = width / 2 - ((cols - 1) * paddingX) / 2;
-    const startY = 150;
+    const startY = 155;
 
     const saveData = SaveSystem.load();
 
@@ -96,18 +96,18 @@ export class LevelSelectScene extends Scene {
         boxGraphics.strokeRoundedRect(x - itemWidth / 2, y - itemHeight / 2, itemWidth, itemHeight, 8);
 
         // Stage number (Reduced proportional size & offset)
-        this.add.text(x, y - 14, `${level.id}`, {
+        this.add.text(x, y - 10, `${level.id}`, {
           fontFamily: '"Space Grotesk", system-ui, sans-serif',
-          fontSize: '20px',
+          fontSize: '16px',
           fontStyle: 'bold',
           color: '#1c7ed6'
         }).setOrigin(0.5);
 
         // Stage short description or short title (e.g. 제1조) (Reduced proportional size & offset)
         const shortName = level.name.split(':')[0] || "스테이지";
-        this.add.text(x, y + 10, shortName, {
+        this.add.text(x, y + 8, shortName, {
           fontFamily: 'system-ui, sans-serif',
-          fontSize: '8px',
+          fontSize: '7.5px',
           fontStyle: 'bold',
           color: '#495057'
         }).setOrigin(0.5);
@@ -116,19 +116,19 @@ export class LevelSelectScene extends Scene {
         const starsAcquired = record.stars || 0;
         const starGroup = this.add.graphics();
         starGroup.fillStyle(0xffd43b, 1); // Yellow
-        
+         
         for (let s = 0; s < 3; s++) {
-          const starX = x + (s - 1) * 12;
-          const starY = y + 23;
+          const starX = x + (s - 1) * 10;
+          const starY = y + 19;
           
           if (s < starsAcquired) {
             // Draw filled star diamond/polygon
             starGroup.fillStyle(0xffd43b, 1);
-            this.drawStar(starGroup, starX, starY, 4, 5, 3);
+            this.drawStar(starGroup, starX, starY, 3, 4, 3);
           } else {
             // Draw gray unreached star
             starGroup.fillStyle(0xdee2e6, 1);
-            this.drawStar(starGroup, starX, starY, 4, 5, 3);
+            this.drawStar(starGroup, starX, starY, 3, 4, 3);
           }
         }
 
@@ -169,13 +169,13 @@ export class LevelSelectScene extends Scene {
         boxGraphics.strokeRoundedRect(x - itemWidth / 2, y - itemHeight / 2, itemWidth, itemHeight, 8);
 
         // Lock icon representation
-        this.add.text(x, y - 8, '🔒', {
-          fontSize: '14px'
+        this.add.text(x, y - 6, '🔒', {
+          fontSize: '11px'
         }).setOrigin(0.5);
 
-        this.add.text(x, y + 14, 'Locked', {
+        this.add.text(x, y + 10, 'Locked', {
           fontFamily: 'system-ui, sans-serif',
-          fontSize: '8px',
+          fontSize: '7.5px',
           fontStyle: 'normal',
           color: '#868e96'
         }).setOrigin(0.5);

@@ -72,8 +72,9 @@ export default function App() {
   // Settings & Rules Modal overlay states
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [soundOn, setSoundOn] = useState<boolean>(true);
-  const [activeSceneKey, setActiveSceneKey] = useState<string>('BootScene');
+   const [activeSceneKey, setActiveSceneKey] = useState<string>('BootScene');
   const [saveVersion, setSaveVersion] = useState<number>(0);
+  const [uiWarningMessage, setUiWarningMessage] = useState<string | null>(null);
 
   // Load sound state on mount
   useEffect(() => {
@@ -100,11 +101,19 @@ export default function App() {
         setHudState(data);
       });
 
+      gameInstance.events.on('hud_message', (payload: { type: string, text: string }) => {
+        setUiWarningMessage(payload.text);
+        setTimeout(() => {
+          setUiWarningMessage(prev => prev === payload.text ? null : prev);
+        }, 3200);
+      });
+
       gameInstance.events.on('scene_change', (sceneKey: string) => {
         setIsSettingsOpen(false);
         setActiveSceneKey(sceneKey);
         if (sceneKey !== 'GameScene') {
           setHudState(null);
+          setUiWarningMessage(null);
         }
         if (sceneKey !== 'ResultScene') {
           setResultPayload(null);
@@ -856,6 +865,16 @@ export default function App() {
                   🚪 RETREAT
                 </button>
               </div>
+
+              {/* Custom alert and ammo warning message toast overlay */}
+              {uiWarningMessage && (
+                <div className="absolute top-[40px] left-1/2 transform -translate-x-1/2 pointer-events-none z-30 select-none animate-fade-in">
+                  <div className="bg-amber-500/90 text-white font-black text-[9px] text-center px-4 py-1.5 border-2 border-amber-400 rounded-xl shadow-lg flex items-center justify-center gap-1.5 max-w-[280px]">
+                    <span className="text-[11px]">🔔</span>
+                    <span className="leading-tight">{uiWarningMessage}</span>
+                  </div>
+                </div>
+              )}
 
               {/* 3. TOP LEFT STACKED: SQUAD QUICK SELECTOR (Planted Floating) */}
               <div className="absolute left-2.5 top-[42px] flex flex-col gap-1 pointer-events-auto z-20 select-none">

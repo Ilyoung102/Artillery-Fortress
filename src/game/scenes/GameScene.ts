@@ -26,6 +26,7 @@ export class GameScene extends Scene {
   private blockBodies: any[] = [];
   private enemyBodies: any[] = [];
   private activeProjectile: any = null;
+  private activeProjectiles: any[] = [];
   
   // Tactical terrain heights and graphics
   private playerBaseY: number = 500;
@@ -57,7 +58,6 @@ export class GameScene extends Scene {
   private isGameEnded: boolean = false;
   private isMidAirActionSpent: boolean = false;
   private shieldUsesLeft: number = 3;
-  private enemiesLeftToShoot: any[] = []; // Sequential tracking for multiple enemy firing turns
 
   // Clouds and keyboard cursors for tactical movement
   private bgClouds: { graphics: Phaser.GameObjects.Graphics; speed: number }[] = [];
@@ -108,7 +108,7 @@ export class GameScene extends Scene {
     this.isPaused = false;
     this.isGameEnded = false;
     this.shieldUsesLeft = 3;
-    this.enemiesLeftToShoot = [];
+    this.activeProjectiles = [];
     this.blockHealthMap.clear();
     this.enemyHealthMap.clear();
     this.blockBodies = [];
@@ -808,42 +808,51 @@ export class GameScene extends Scene {
       }
     }
 
-    // If projectile is active, monitor its motion limits
-    if (this.activeProjectile) {
-      const body = this.activeProjectile.body;
-      if (body && body.position) {
-        // Apply micro wind force to projectiles
-        const windXForce = this.windSystem.getForceX(body.mass);
-        this.matter.body.applyForce(body, body.position, { x: windXForce, y: 0 });
+    // If projectiles are active, monitor their motion limits
+    if (this.activeProjectiles.length > 0) {
+      this.activeProjectile = this.activeProjectiles[0] || null;
 
-        // Auto follow weapon body
-        this.cameras.main.scrollX = Phaser.Math.Clamp(body.position.x - 400, 0, 150);
+      for (let i = this.activeProjectiles.length - 1; i >= 0; i--) {
+        const proj = this.activeProjectiles[i];
+        if (!proj || !proj.active) {
+          this.activeProjectiles.splice(i, 1);
+          continue;
+        }
 
-        // Dynamically update whistling flight sound pitch based on projectile velocity and height
-        this.updateFlySound(body.speed, body.position.y);
+        const body = proj.body;
+        if (body && body.position) {
+          // Apply micro wind force to projectiles
+          const windXForce = this.windSystem.getForceX(body.mass);
+          this.matter.body.applyForce(body, body.position, { x: windXForce, y: 0 });
 
-        // Check if stopped moving, fell off boundaries, or took too long
-        const speed = body.speed;
-        const outOfBounds = (body.position.x > 1100 || body.position.x < -100 || body.position.y > 620);
-        const settled = speed < 0.25;
+          // Auto follow the first active projectile so the camera has a focus!
+          if (i === 0) {
+            this.cameras.main.scrollX = Phaser.Math.Clamp(body.position.x - 400, 0, 150);
+            this.updateFlySound(body.speed, body.position.y);
+          }
 
-        // Check if fell into the central hazard wave
-        const isSpill = (body.position.x > 420 && body.position.x < 650 && body.position.y > 555);
+          // Check if stopped moving, fell off boundaries, or took too long
+          const speed = body.speed;
+          const outOfBounds = (body.position.x > 1100 || body.position.x < -100 || body.position.y > 620);
+          const settled = speed < 0.25;
 
-        if (isSpill) {
-          this.spawnSplashEffects(body.position.x, body.position.y);
-          this.terminateProjectileTurn();
-        } else if (outOfBounds) {
-          this.terminateProjectileTurn();
-        } else if (settled && this.time.now - (this.activeProjectile as any).spawnTime > 1500) {
-          // Slow down slide, then resolve
-          this.terminateProjectileTurn();
-        } else if (this.time.now - (this.activeProjectile as any).spawnTime > 8000) {
-          // Safe timer fallback (e.g. infinite bouncy movement)
-          this.terminateProjectileTurn();
+          // Check if fell into the central hazard wave
+          const isSpill = (body.position.x > 420 && body.position.x < 650 && body.position.y > 555);
+
+          if (isSpill) {
+            this.spawnSplashEffects(body.position.x, body.position.y);
+            this.terminateSingleProjectile(proj);
+          } else if (outOfBounds) {
+            this.terminateSingleProjectile(proj);
+          } else if (settled && this.time.now - proj.spawnTime > 1500) {
+            this.terminateSingleProjectile(proj);
+          } else if (this.time.now - proj.spawnTime > 8000) {
+            this.terminateSingleProjectile(proj);
+          }
         }
       }
     } else {
+      this.activeProjectile = null;
       // Re-center camera gently
       if (this.cameras.main.scrollX > 0) {
         this.cameras.main.scrollX -= 4;
@@ -1351,7 +1360,16 @@ export class GameScene extends Scene {
     const currentWeapon = WEAPONS[this.selectedWeaponId] || WEAPONS.basic;
     if (this.ammoRemaining[this.selectedWeaponId] !== undefined) {
       if (this.ammoRemaining[this.selectedWeaponId] <= 0) {
-        alert("선택한 비축 탄환이 소진되었습니다! 기본 탄환으로 대체 발사됩니다.");
+        this.game.events.emit("hud_message", { 
+          type: "warning", 
+          text: "선택한 비축 탄환이 소진되었습니다! 기본 탄환으로 대체 발사됩니다." 
+        });
+        this.spawnFloatingTxt(
+          this.activePlayerUnit ? this.activePlayerUnit.x : 200, 
+          this.activePlayerUnit ? this.activePlayerUnit.y - 70 : 300, 
+          "⚠️ 탄환 소진! 기본 공격 대체", 
+          "#ffa94d"
+        );
         this.selectedWeaponId = "basic";
       }
       this.ammoRemaining[this.selectedWeaponId]--;
@@ -1377,7 +1395,16 @@ export class GameScene extends Scene {
     // Validate ammo
     if (this.ammoRemaining[this.selectedWeaponId] !== undefined) {
       if (this.ammoRemaining[this.selectedWeaponId] <= 0) {
-        alert("장탄이 부족합니다! 기본 탄환을 사용합니다.");
+        this.game.events.emit("hud_message", { 
+          type: "warning", 
+          text: "장탄이 부족합니다! 기본 탄환을 사용합니다." 
+        });
+        this.spawnFloatingTxt(
+          this.activePlayerUnit ? this.activePlayerUnit.x : 200, 
+          this.activePlayerUnit ? this.activePlayerUnit.y - 70 : 300, 
+          "⚠️ 장탄 부족! 기본 탄환 사용", 
+          "#ffa94d"
+        );
         this.selectedWeaponId = "basic";
       }
       this.ammoRemaining[this.selectedWeaponId]--;
@@ -1397,7 +1424,7 @@ export class GameScene extends Scene {
     this.spawnAndLaunchProjectile(vx, vy, false);
   }
 
-  private spawnAndLaunchProjectile(vx: number, vy: number, isEnemyWeapon: boolean) {
+  private spawnAndLaunchProjectile(vx: number, vy: number, isEnemyWeapon: boolean, customStartX?: number, customStartY?: number) {
     const sPos = isEnemyWeapon ? { x: 800, y: 150 } : this.levelData.playerStart; // Enemy position or player position
     const weaponData = WEAPONS[this.selectedWeaponId] || WEAPONS.basic;
     
@@ -1473,8 +1500,8 @@ export class GameScene extends Scene {
     }
 
     // Launch!
-    const projX = isEnemyWeapon ? (this.enemyBodies[0]?.x || 780) - 40 : sPos.x;
-    const projY = isEnemyWeapon ? (this.enemyBodies[0]?.y || 400) - 40 : sPos.y;
+    const projX = customStartX !== undefined ? customStartX : (isEnemyWeapon ? (this.enemyBodies[0]?.x || 780) - 40 : sPos.x);
+    const projY = customStartY !== undefined ? customStartY : (isEnemyWeapon ? (this.enemyBodies[0]?.y || 400) - 40 : sPos.y);
 
     const proj = this.add.image(projX, projY, projSpriteKey);
     this.matter.add.gameObject(proj, {
@@ -1494,6 +1521,7 @@ export class GameScene extends Scene {
     (proj as any).isEnemy = isEnemyWeapon;
 
     this.activeProjectile = proj;
+    this.activeProjectiles.push(proj);
 
     // Trigger whistling whoosh flight sound
     this.startFlySound();
@@ -1750,6 +1778,7 @@ export class GameScene extends Scene {
 
       const trail = (this.activeProjectile as any).trailParticles;
       if (trail) trail.destroy();
+      this.activeProjectiles = this.activeProjectiles.filter(p => p !== this.activeProjectile);
       this.activeProjectile.destroy();
       this.matter.world.remove(body);
       this.activeProjectile = null;
@@ -1799,6 +1828,7 @@ export class GameScene extends Scene {
         (proj as any).trailParticles = pt;
         
         pellets.push(proj);
+        this.activeProjectiles.push(proj);
       });
 
       this.activeProjectile = pellets[1];
@@ -1870,6 +1900,7 @@ export class GameScene extends Scene {
           blendMode: 'ADD'
         });
         (bImg as any).trailParticles = pt;
+        this.activeProjectiles.push(bImg);
       }
     }
   }
@@ -2256,51 +2287,37 @@ export class GameScene extends Scene {
 
   // --- Turn Loop Solvers ---
 
-  private terminateProjectileTurn() {
-    if (!this.activeProjectile) return;
-
-    // Stop flight whistling sounds cleanly
-    this.stopFlySound();
-
-    // Purge particles and destroy body
-    if ((this.activeProjectile as any).trailParticles) {
-      (this.activeProjectile as any).trailParticles.destroy();
-    }
+  private terminateSingleProjectile(proj: any) {
+    if (!proj) return;
     
-    this.activeProjectile.destroy();
-    this.activeProjectile = null;
+    // Purge particles and destroy body
+    if (proj.trailParticles) {
+      proj.trailParticles.destroy();
+    }
+    proj.destroy();
+    
+    // Filter out of list
+    this.activeProjectiles = this.activeProjectiles.filter(p => p !== proj);
+    
+    // Re-assign activeProjectile helper
+    this.activeProjectile = this.activeProjectiles[0] || null;
 
-    // Direct solver checks if level resolves
-    const finished = this.checkGameEndStatus();
-    if (finished) return;
+    // If all are completed, transition turn!
+    if (this.activeProjectiles.length === 0) {
+      this.stopFlySound();
+      
+      const finished = this.checkGameEndStatus();
+      if (finished) return;
 
-    // Check if the current turn was a player turn
-    if (this.isPlayerTurn) {
-      // Player turn completed, now trigger Enemy AI turn!
-      this.isPlayerTurn = false;
-      this.notifyHUD();
-
-      // Collect all enemies currently alive to schedule their retribution!
-      // If there are multiple, they will take turns firing in sequence!
-      this.enemiesLeftToShoot = [...this.enemyBodies];
-
-      // Simple AI action latency delay
-      this.time.delayedCall(1600, () => {
-        this.executeEnemyCombatDecision();
-      });
-    } else {
-      // Check if we still have enemies left to shoot!
-      if (this.enemiesLeftToShoot && this.enemiesLeftToShoot.length > 0) {
-        // Fire again with the next enemy in sequence!
-        this.time.delayedCall(1400, () => {
+      if (this.isPlayerTurn) {
+        this.isPlayerTurn = false;
+        this.notifyHUD();
+        this.time.delayedCall(1600, () => {
           this.executeEnemyCombatDecision();
         });
       } else {
-        // Enemy turn fully completed, return crown to player and consume standard turn index
         this.currentTurnNumber++;
         this.isPlayerTurn = true;
-        
-        // Shuffle wind direction vector
         this.windSystem.randomize();
         this.spawnPlayerAtStart();
         this.notifyHUD();
@@ -2321,25 +2338,8 @@ export class GameScene extends Scene {
       return;
     }
 
-    // Verify there is an active list of shooters. If not, initialize it
-    if (!this.enemiesLeftToShoot || this.enemiesLeftToShoot.length === 0) {
-      this.isPlayerTurn = true;
-      this.currentTurnNumber++;
-      this.notifyHUD();
-      return;
-    }
-
-    // Grab the next shooter from the sequence
-    const shootingEnemyBody = this.enemiesLeftToShoot.shift();
-    // Validate that the shooter is still alive (not blown up during previous explosions)
-    if (!shootingEnemyBody || !this.enemyBodies.includes(shootingEnemyBody)) {
-      // If destroyed, skip and immediately request next decision
-      this.time.delayedCall(100, () => this.executeEnemyCombatDecision());
-      return;
-    }
-
-    // Informing user: floating text alert banner
-    const alertText = this.add.text(512, 110, `⚠️ 적군 반격 사격 개시! (${this.enemyBodies.indexOf(shootingEnemyBody) + 1}호기)`, {
+    // Informing user: floating text alert banner for simultaneous coordinated firing
+    const alertText = this.add.text(512, 110, `⚠️ 적군 합동 포화 개시! (COORDINATED ENEMY FIRE!)`, {
       fontFamily: 'system-ui, sans-serif',
       fontSize: '22px',
       fontStyle: 'bold',
@@ -2357,61 +2357,64 @@ export class GameScene extends Scene {
       onComplete: () => alertText.destroy()
     });
 
-    // Precise launch coordinates matching where the projectile is actually spawned in spawnAndLaunchProjectile
-    const launchStartX = shootingEnemyBody.x - 40;
-    const launchStartY = shootingEnemyBody.y - 40;
-
-    // High lobbing parabolic calculations (with beautiful flight curvature)
-    const targetX = this.activePlayerUnit ? this.activePlayerUnit.x : this.levelData.playerStart.x;
-    const targetY = this.activePlayerUnit ? this.activePlayerUnit.y : this.levelData.playerStart.y;
-
-    // We want the mortar to climb 200-280px above heights to clear shield cover beautifully
-    const heightApex = 240 + Math.random() * 50;
-    const peakY = Math.min(launchStartY, targetY) - heightApex;
-
-    // Matter physics gravity constant used for standard calculations is 0.40
-    const g = 0.40;
-
-    // Analytical flight segment solver
-    const t_up = Math.sqrt(2 * Math.max(15, launchStartY - peakY) / g);
-    const t_down = Math.sqrt(2 * Math.max(15, targetY - peakY) / g);
-    const t_total = t_up + t_down;
-
-    const totalDX = targetX - launchStartX;
-
-    // Exact wind compensator: matches player-side trajectory prediction: const wX = strength * 0.003
-    const wX = this.windSystem.getStrength() * 0.003;
-    let baseVx = (totalDX - 0.5 * wX * t_total * t_total) / t_total;
-
-    // Base vertical launch speed required to climb to the peakY altitude
-    const baseVy = -g * t_up;
-
-    // Smart level-based accuracy tuning (making low levels moderately easy but higher level bosses ruthless snipers!)
     const levelIndex = this.levelData.id;
-    let noiseRange = 0.4;
-    if (levelIndex === 1) {
-      noiseRange = 0.5; // Level 1: Moderate dispersion (makes them threat, but gives breathing room)
-    } else if (levelIndex === 2) {
-      noiseRange = 0.35; // Level 2: Better aiming
-    } else if (levelIndex === 3) {
-      noiseRange = 0.22; // Level 3: Competitive aiming
-    } else if (levelIndex >= 4 && levelIndex <= 6) {
-      noiseRange = 0.12; // Level 4-6: Highly dangerous, very small dispersion
-    } else if (levelIndex >= 7 && levelIndex <= 9) {
-      noiseRange = 0.04; // Level 7-9: Extreme precision
-    } else {
-      noiseRange = 0.01; // Level 10-12 (Final Bosses): Ruthless sniper precision, perfect targeting!
-    }
+    // Smoother scaling function for requirement 4: "적중률도 좀 높아간다"
+    let noiseRange = 0.45;
+    if (levelIndex === 1) noiseRange = 0.45;
+    else if (levelIndex === 2) noiseRange = 0.35;
+    else if (levelIndex === 3) noiseRange = 0.25;
+    else if (levelIndex === 4) noiseRange = 0.18;
+    else if (levelIndex === 5) noiseRange = 0.12;
+    else if (levelIndex === 6) noiseRange = 0.08;
+    else if (levelIndex === 7) noiseRange = 0.05;
+    else if (levelIndex === 8) noiseRange = 0.03;
+    else if (levelIndex === 9) noiseRange = 0.015;
+    else noiseRange = 0.005;
 
-    const finalVx = baseVx + (Math.random() * 2 - 1) * noiseRange * 6;
-    const finalVy = baseVy + (Math.random() * 2 - 1) * noiseRange * 6;
+    // Loop through every remaining enemy and trigger their fired shots simultaneously (staggered slightly by 120ms for visuals)
+    this.enemyBodies.forEach((shootingEnemyBody, index) => {
+      this.time.delayedCall(index * 120, () => {
+        // Validate that the shooter is still alive (not blown up mid-firing due to simultaneous explosions)
+        if (!shootingEnemyBody || !this.enemyBodies.includes(shootingEnemyBody)) {
+          return;
+        }
 
-    // Speed vector scaling match - Eliminate the 0.165 downscaling error that dropped shots at feet!
-    const impulseSpeedX = finalVx;
-    const impulseSpeedY = finalVy;
+        // Precise launch coordinates matching where the projectile is actually spawned in spawnAndLaunchProjectile
+        const launchStartX = shootingEnemyBody.x - 40;
+        const launchStartY = shootingEnemyBody.y - 40;
 
-    this.time.delayedCall(400, () => {
-      this.spawnAndLaunchProjectile(impulseSpeedX, impulseSpeedY, true);
+        // High lobbing parabolic calculations (with beautiful flight curvature)
+        // Find player position at trigger time. If player moved, AI recalcs target - extremely dynamic dodging game!
+        const targetX = this.activePlayerUnit ? this.activePlayerUnit.x : this.levelData.playerStart.x;
+        const targetY = this.activePlayerUnit ? this.activePlayerUnit.y : this.levelData.playerStart.y;
+
+        // We want the mortar to climb 200-280px above heights to clear shield cover beautifully
+        const heightApex = 240 + Math.random() * 50;
+        const peakY = Math.min(launchStartY, targetY) - heightApex;
+
+        // Matter physics gravity constant used for standard calculations is 0.40
+        const g = 0.40;
+
+        // Analytical flight segment solver
+        const t_up = Math.sqrt(2 * Math.max(15, launchStartY - peakY) / g);
+        const t_down = Math.sqrt(2 * Math.max(15, targetY - peakY) / g);
+        const t_total = t_up + t_down;
+
+        const totalDX = targetX - launchStartX;
+
+        // Exact wind compensator: matches player-side trajectory prediction: const wX = strength * 0.003
+        const wX = this.windSystem.getStrength() * 0.003;
+        let baseVx = (totalDX - 0.5 * wX * t_total * t_total) / t_total;
+
+        // Base vertical launch speed required to climb to the peakY altitude
+        const baseVy = -g * t_up;
+
+        // Inject level accuracy noise range
+        const finalVx = baseVx + (Math.random() * 2 - 1) * noiseRange * 6;
+        const finalVy = baseVy + (Math.random() * 2 - 1) * noiseRange * 6;
+
+        this.spawnAndLaunchProjectile(finalVx, finalVy, true, launchStartX, launchStartY);
+      });
     });
   }
 
